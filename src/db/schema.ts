@@ -1,4 +1,4 @@
-﻿import {
+import {
   pgTable,
   serial,
   varchar,
@@ -20,7 +20,9 @@ export const products = pgTable("products", {
 
 export const productSizes = pgTable("product_sizes", {
   id: serial("id").primaryKey(),
-  productId: integer("product_id").notNull().references(() => products.id),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
   size: varchar("size").notNull(),
   stock: integer("stock").default(0),
 });
@@ -38,8 +40,12 @@ export const orders = pgTable("orders", {
 
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
-  orderId: integer("order_id").notNull().references(() => orders.id),
-  productId: integer("product_id").notNull().references(() => products.id),
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => orders.id),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
   size: varchar("size").notNull(),
   quantity: integer("quantity").notNull(),
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),

@@ -1,24 +1,27 @@
 # Project Context — my-store
 
 ## What we are building
-A simple e-commerce storefront with an admin panel. No user login system. Cart is handled via browser localStorage.
+A fully functional e-commerce storefront with an admin panel.
+- **Storefront**: Arabic RTL layout featuring a modern, minimal streetwear aesthetic using the **Tajawal** font. Cart functionality is handled entirely client-side via browser `localStorage`.
+- **Admin Panel**: LTR layout for managing products, sizes, and orders. Uses simple cookie-based authentication.
+- **Image Management**: Integrated with Cloudinary for product image uploads.
 
 ---
 
 ## Tech Stack
 | Layer | Choice |
 |---|---|
-| Frontend + API | Next.js (App Router) |
+| Frontend + API | Next.js 16 (App Router) |
 | ORM | Drizzle ORM |
-| Database | PostgreSQL via Neon |
-| Deployment | Vercel (frontend) + Neon (DB) |
-| Styling | Tailwind CSS |
+| Database | PostgreSQL via Neon (Serverless) |
+| Image Hosting | Cloudinary |
+| Styling | Tailwind CSS v4 |
 | Language | TypeScript |
 
 ---
 
 ## Database Schema
-5 tables — already migrated to Neon:
+5 tables — migrated to Neon PostgreSQL:
 
 - **products** — id, name, description, price, stock, image_url, created_at
 - **product_sizes** — id, product_id (FK), size, stock
@@ -32,92 +35,68 @@ A simple e-commerce storefront with an admin panel. No user login system. Cart i
 ```
 my-store/
 ├── src/
-│   ├── app/                  # Next.js App Router pages
-│   └── db/
-│       ├── schema.ts         # Drizzle schema (all 5 tables)
-│       └── index.ts          # Neon DB connection
+│   ├── app/
+│   │   ├── (store)/          # Customer Storefront (Arabic RTL)
+│   │   │   ├── layout.tsx    # Root Storefront wrapper (Navbar & Footer)
+│   │   │   ├── page.tsx      # Home Page (Hero & Featured Products)
+│   │   │   ├── products/     # Products Catalog (Client-side filters)
+│   │   │   └── product/[id]/ # Product Detail Page & Order Form
+│   │   ├── admin/            # Admin Panel (LTR)
+│   │   │   ├── login/        # Admin Login
+│   │   │   ├── products/     # Product & Size Management
+│   │   │   └── orders/       # Order Management
+│   │   └── api/              # API Routes (Products, Orders, Auth, Upload)
+│   ├── components/
+│   │   └── store/            # Reusable Storefront UI (Navbar, ProductCard, CartIcon)
+│   ├── db/
+│   │   ├── schema.ts         # Drizzle schema definition
+│   │   ├── index.ts          # Neon DB connection export
+│   │   └── seed.ts           # DB Seed script
+│   └── lib/
+│       ├── cart.ts           # LocalStorage cart helper functions
+│       ├── cloudinary.ts     # Cloudinary integration functions
+│       └── utils.ts          # Utilities (e.g., formatPrice)
 ├── drizzle/                  # Generated SQL migrations
 ├── drizzle.config.ts         # Drizzle config
-├── .env                      # DATABASE_URL (Neon connection string)
+├── .env                      # Environment Variables
 └── package.json
 ```
 
 ---
 
-## Key Files
+## Development & Environment
 
-### `drizzle.config.ts`
-```ts
-import { defineConfig } from "drizzle-kit";
-
-export default defineConfig({
-  schema: "./src/db/schema.ts",
-  out: "./drizzle",
-  dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL ?? "placeholder",
-  },
-});
+### Key Environment Variables (`.env`)
+```
+DATABASE_URL="postgres://..."
+CLOUDINARY_CLOUD_NAME="..."
+CLOUDINARY_API_KEY="..."
+CLOUDINARY_API_SECRET="..."
 ```
 
-### `src/db/index.ts`
-```ts
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
-import * as schema from "./schema";
-
-const sql = neon(process.env.DATABASE_URL!);
-export const db = drizzle(sql, { schema });
-```
-
-### `package.json` scripts
-```json
-"db:generate": "drizzle-kit generate",
-"db:migrate": "drizzle-kit migrate",
-"db:studio": "drizzle-kit studio"
-```
-
----
-
-## Dependencies
-```json
-"dependencies": {
-  "@neondatabase/serverless": "^1.1.0",
-  "dotenv": "^17.4.2",
-  "drizzle-orm": "^0.45.2",
-  "next": "16.2.9",
-  "react": "19.2.4",
-  "react-dom": "19.2.4"
-},
-"devDependencies": {
-  "drizzle-kit": "^0.31.10",
-  "tailwindcss": "^4",
-  "typescript": "^5"
-}
-```
-
----
-
-## Cart Implementation
-No server-side cart. Cart state is stored in **browser localStorage** only. No `cart` or `cart_items` table in the DB.
+### Scripts
+- `npm run dev`: Start Next.js development server
+- `npm run build`: Build for production
+- `npm run db:generate`: Generate Drizzle migrations
+- `npm run db:migrate`: Run migrations against Neon
+- `npm run db:seed`: Seed the database with fake data
+- `npm run db:studio`: Open Drizzle Studio to inspect DB
 
 ---
 
 ## Decisions Made
-- No user authentication (customers don't log in)
-- Admin panel will use a separate login via `admin_users` table
-- Free deployment: Vercel + Neon free tiers
-- Full Next.js (no separate Express server)
-- npm as package manager
+- No user authentication for customers (guest checkout only).
+- Admin panel uses a separate login via the `admin_users` table and secure HTTP-only cookies.
+- Cart state is stored exclusively in **browser localStorage**. There is no server-side cart database table.
+- Form submissions (orders, products) interact via RESTful API routes (`/api/...`).
+- Storefront styling is minimal: white backgrounds, solid black primary accents, and Tailwind `gap-10` conventions.
 
 ---
 
 ## Current Status
 ✅ Next.js project initialized  
-✅ Drizzle + Neon installed and configured  
-✅ Schema written and migration generated  
-✅ Tables migrated to Neon database  
-⬜ Project folder structure (next step)  
-⬜ API routes  
-⬜ Frontend pages  
-⬜ Admin panel  
+✅ Drizzle + Neon installed, configured, and migrated  
+✅ API routes built (`/api/products`, `/api/orders`, `/api/admin/auth`, `/api/upload`)  
+✅ Admin Panel built (Login, Product Management, Image Uploads, Size Management)  
+✅ Customer Storefront built (Home, Catalog, Detail Pages, Order Checkout Form)  
+✅ Cloudinary integrated for image uploads  
