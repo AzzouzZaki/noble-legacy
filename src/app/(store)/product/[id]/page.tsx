@@ -2,11 +2,22 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { addToCart } from "@/lib/cart";
+import { formatPrice } from "@/lib/utils";
+import ImageCarousel from "@/components/store/ImageCarousel";
+import ZimouOfficeSelect, {
+  ZimouDeliveryChoice,
+} from "@/components/store/ZimouOfficeSelect";
 
 interface SizeEntry {
   id: number;
   size: string;
   stock: number;
+}
+
+interface ProductImage {
+  id: number;
+  url: string;
+  position: number | null;
 }
 
 interface Product {
@@ -17,6 +28,7 @@ interface Product {
   stock: number | null;
   imageUrl: string | null;
   sizes: SizeEntry[];
+  images?: ProductImage[];
 }
 
 interface ProductPageProps {
@@ -42,8 +54,8 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const [deliveryType, setDeliveryType] = useState<"home" | "pickup">("home");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [province, setProvince] = useState("");
   const [address, setAddress] = useState("");
+  const [selectedDelivery, setSelectedDelivery] = useState<ZimouDeliveryChoice | null>(null);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
@@ -93,6 +105,9 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
 
   const priceValue = parseFloat(product.price || "0");
   const formattedPrice = `${priceValue.toFixed(0)} دج`;
+  const deliveryPrice = selectedDelivery?.price ?? 0;
+  const productTotal = priceValue * quantity;
+  const orderTotal = productTotal + deliveryPrice;
 
   const handleAddToCart = () => {
     if (!selectedSize) {
@@ -148,7 +163,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
     const errors: { [key: string]: string } = {};
     if (!fullName.trim()) errors.fullName = "الاسم الكامل مطلوب";
     if (!phone.trim()) errors.phone = "رقم الهاتف مطلوب";
-    if (!province.trim()) errors.province = "الولاية مطلوبة";
+    if (!selectedDelivery) errors.delivery = "يرجى اختيار تفاصيل التوصيل";
     if (deliveryType === "home" && !address.trim()) {
       errors.address = "العنوان مطلوب لتوصيل المنزل";
     }
@@ -162,16 +177,19 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
     setOrderError(null);
 
     // Prepare address string
+    const deliveryDetails = selectedDelivery
+      ? `التوصيل: ${selectedDelivery.label} - ${selectedDelivery.communeName}, ${selectedDelivery.wilayaName} - سعر التوصيل: ${formatPrice(selectedDelivery.price)}`
+      : "";
     const finalAddress =
       deliveryType === "home"
-        ? `الولاية: ${province} - ${address}`
-        : `الولاية: ${province} - استلام من مكتب التوصيل`;
+        ? `عنوان المنزل: ${address} - ${deliveryDetails}`
+        : `استلام من مكتب التوصيل - ${deliveryDetails}`;
 
     const payload = {
       customerName: fullName,
       customerPhone: phone,
       shippingAddress: finalAddress,
-      totalAmount: String(priceValue * quantity),
+      totalAmount: String(orderTotal),
       items: [
         {
           productId: product.id,
@@ -197,8 +215,8 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
       // Reset form
       setFullName("");
       setPhone("");
-      setProvince("");
       setAddress("");
+      setSelectedDelivery(null);
       setSelectedSize(null);
       setQuantity(1);
     } catch (err) {
@@ -215,19 +233,17 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
       {/* Two-Column Top Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-16">
         
-        {/* Right Side: Product Image */}
-        <div className="w-full bg-neutral-50 rounded-xl overflow-hidden border border-divider order-1 md:order-2">
-          {product.imageUrl ? (
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="w-full h-auto object-cover max-h-[600px] mx-auto"
-            />
-          ) : (
-            <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-muted-text">
-              لا توجد صورة للمنتج
-            </div>
-          )}
+        {/* Right Side: Product Image Carousel */}
+        <div className="w-full order-1 md:order-2">
+          <ImageCarousel
+            images={
+              product.images && product.images.length > 0
+                ? product.images.map((img) => img.url)
+                : product.imageUrl
+                  ? [product.imageUrl]
+                  : []
+            }
+          />
         </div>
 
         {/* Left Side: Product Details & Selection */}
@@ -395,7 +411,10 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
                 
                 {/* Home Delivery Card */}
                 <div
-                  onClick={() => setDeliveryType("home")}
+                  onClick={() => {
+                    setDeliveryType("home");
+                    setSelectedDelivery(null);
+                  }}
                   className={`
                     border-2 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200 bg-white
                     ${deliveryType === "home" ? "border-black shadow-sm" : "border-neutral-200 hover:border-neutral-300"}
@@ -407,7 +426,10 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
 
                 {/* Pickup Card */}
                 <div
-                  onClick={() => setDeliveryType("pickup")}
+                  onClick={() => {
+                    setDeliveryType("pickup");
+                    setSelectedDelivery(null);
+                  }}
                   className={`
                     border-2 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200 bg-white
                     ${deliveryType === "pickup" ? "border-black shadow-sm" : "border-neutral-200 hover:border-neutral-300"}
@@ -466,29 +488,6 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
               )}
             </div>
 
-            {/* Province */}
-            <div className="space-y-2">
-              <label htmlFor="province" className="text-sm font-bold text-primary block font-tajawal">
-                الولاية
-              </label>
-              <input
-                id="province"
-                type="text"
-                value={province}
-                onChange={(e) => setProvince(e.target.value)}
-                className={`
-                  w-full bg-white border rounded-lg px-4 py-3 text-sm text-primary placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all
-                  ${formErrors.province ? "border-red-500 ring-1 ring-red-500" : "border-neutral-300"}
-                `}
-                placeholder="الجزائر"
-              />
-              {formErrors.province && (
-                <span className="text-xs font-semibold text-red-600 block mt-1 font-tajawal">
-                  {formErrors.province}
-                </span>
-              )}
-            </div>
-
             {/* Conditional Address (Home Delivery only) */}
             {deliveryType === "home" && (
               <div className="space-y-2">
@@ -513,6 +512,31 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
                 )}
               </div>
             )}
+
+            <ZimouOfficeSelect
+              mode={deliveryType === "home" ? "home" : "office"}
+              selectedChoice={selectedDelivery}
+              onSelectChoice={(choice) => {
+                setSelectedDelivery(choice);
+                setFormErrors((prev) => ({ ...prev, delivery: "" }));
+              }}
+              error={formErrors.delivery}
+            />
+
+            <div className="rounded-lg border border-divider bg-neutral-50 p-4 space-y-2 font-tajawal">
+              <div className="flex justify-between text-sm text-muted-text">
+                <span>المجموع الفرعي</span>
+                <span className="font-bold text-primary">{formatPrice(productTotal)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-muted-text">
+                <span>سعر التوصيل</span>
+                <span className="font-bold text-primary">{formatPrice(deliveryPrice)}</span>
+              </div>
+              <div className="flex justify-between border-t border-divider pt-2 text-base font-extrabold text-primary">
+                <span>الإجمالي</span>
+                <span>{formatPrice(orderTotal)}</span>
+              </div>
+            </div>
 
             {/* Submit Button */}
             <button

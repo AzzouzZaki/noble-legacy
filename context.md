@@ -38,16 +38,17 @@ my-store/
 │   ├── app/
 │   │   ├── (store)/          # Customer Storefront (Arabic RTL)
 │   │   │   ├── layout.tsx    # Root Storefront wrapper (Navbar & Footer)
-│   │   │   ├── page.tsx      # Home Page (Hero & Featured Products)
+│   │   │   ├── page.tsx      # Home Page (Animated Hero & Featured Products)
+│   │   │   ├── cart/         # Cart Page (LocalStorage syncing & Checkout Form)
 │   │   │   ├── products/     # Products Catalog (Client-side filters)
-│   │   │   └── product/[id]/ # Product Detail Page & Order Form
+│   │   │   └── product/[id]/ # Product Detail Page
 │   │   ├── admin/            # Admin Panel (LTR)
 │   │   │   ├── login/        # Admin Login
 │   │   │   ├── products/     # Product & Size Management
 │   │   │   └── orders/       # Order Management
 │   │   └── api/              # API Routes (Products, Orders, Auth, Upload)
 │   ├── components/
-│   │   └── store/            # Reusable Storefront UI (Navbar, ProductCard, CartIcon)
+│   │   └── store/            # Reusable Storefront UI (Navbar, Footer, ProductCard, CartIcon)
 │   ├── db/
 │   │   ├── schema.ts         # Drizzle schema definition
 │   │   ├── index.ts          # Neon DB connection export
@@ -94,9 +95,30 @@ CLOUDINARY_API_SECRET="..."
 ---
 
 ## Current Status
-✅ Next.js project initialized  
+✅ Next.js project initialized (Default Next.js starter removed to resolve route group priority)
 ✅ Drizzle + Neon installed, configured, and migrated  
 ✅ API routes built (`/api/products`, `/api/orders`, `/api/admin/auth`, `/api/upload`)  
 ✅ Admin Panel built (Login, Product Management, Image Uploads, Size Management)  
-✅ Customer Storefront built (Home, Catalog, Detail Pages, Order Checkout Form)  
-✅ Cloudinary integrated for image uploads  
+✅ Customer Storefront built (Home, Catalog, Detail Pages, Cart, Checkout Form)  
+✅ Visual Upgrades (Animated Hero, Premium Footer, Custom Tailwind Keyframes)
+✅ Cloudinary integrated for image uploads
+
+## Zimou Express Synchronization Service
+
+**Goal:** Import delivery offices and pricing data from the authenticated Zimou dashboard into the Neon PostgreSQL database.
+
+**Tech Stack:** Playwright, TypeScript, Prisma ORM, dotenv.
+
+**Folder Structure:** `src/lib/scraper/` containing:
+- `browser.ts`
+- `login.ts`
+- `scraper.ts`
+- `parser.ts`
+- `sync.ts`
+- `pagination.ts`
+- `database.ts`
+- `types.ts`
+
+**Current State:** Implemented login (with headful CAPTCHA handling), scraper with detailed logging, parser with validation, database connection checks, and sync orchestrator. Debug artifacts saved in `debug/`. Still facing zero rows insertion due to selector issues.
+
+**Next Steps:** Fix DOM selectors, improve login session persistence, add automated tests, expose `npm run zimou:sync` script, and document setup.

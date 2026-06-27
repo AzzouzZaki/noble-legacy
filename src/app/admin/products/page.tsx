@@ -9,6 +9,12 @@ interface SizeEntry {
   stock: number;
 }
 
+interface ImageEntry {
+  id: number;
+  url: string;
+  position: number | null;
+}
+
 interface Product {
   id: number;
   name: string;
@@ -18,6 +24,7 @@ interface Product {
   imageUrl: string | null;
   createdAt: string;
   sizes?: SizeEntry[];
+  images?: ImageEntry[];
 }
 
 interface Toast {
@@ -88,6 +95,7 @@ export default function AdminProductsPage() {
   /* form */
   const [form, setForm] = useState(EMPTY_FORM);
   const [sizes, setSizes] = useState<SizeEntry[]>([]);
+  const [images, setImages] = useState<string[]>([]);
 
   /* delete confirmation */
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -126,6 +134,7 @@ export default function AdminProductsPage() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setSizes([]);
+    setImages([]);
     setPanelOpen(true);
   };
 
@@ -152,11 +161,17 @@ export default function AdminProductsPage() {
               }))
             : []
         );
+        setImages(
+          Array.isArray(full.images)
+            ? full.images.map((img: { url: string }) => img.url)
+            : full.imageUrl ? [full.imageUrl] : []
+        );
       } else {
         setSizes([]);
       }
     } catch {
       setSizes([]);
+      setImages([]);
     }
     setPanelOpen(true);
   };
@@ -187,13 +202,14 @@ export default function AdminProductsPage() {
       description: form.description.trim() || null,
       price: parseFloat(form.price),
       stock: form.stock ? parseInt(form.stock, 10) : null,
-      imageUrl: form.imageUrl.trim() || null,
+      imageUrl: images[0] || form.imageUrl.trim() || null,
       sizes: sizes
         .filter((s) => s.size.trim())
         .map((s) => ({
           size: s.size.trim(),
           stock: s.stock,
         })),
+      images: images.map((url, i) => ({ url, position: i })),
     };
 
     try {
@@ -468,20 +484,69 @@ export default function AdminProductsPage() {
                 </div>
               </div>
 
-              {/* image upload */}
+              {/* image upload — multi-image */}
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">Product Image</label>
-                {form.imageUrl && (
-                  <div className="mb-3 relative rounded-xl overflow-hidden border border-slate-800/60 aspect-video w-full bg-slate-950">
-                    <img src={form.imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, imageUrl: "" }))}
-                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-950/80 text-slate-400 hover:text-rose-400 hover:bg-slate-950 transition-colors cursor-pointer backdrop-blur-sm border border-slate-800/60"
-                      title="Remove image"
-                    >
-                      <XIcon />
-                    </button>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">Product Images</label>
+                {/* Preview grid */}
+                {images.length > 0 && (
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    {images.map((url, idx) => (
+                      <div key={url + idx} className="relative rounded-xl overflow-hidden border border-slate-800/60 aspect-square bg-slate-950 group">
+                        <img src={url} alt={`Image ${idx + 1}`} className="w-full h-full object-cover" />
+                        {/* Primary badge */}
+                        {idx === 0 && (
+                          <span className="absolute top-1.5 left-1.5 bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                            رئيسية
+                          </span>
+                        )}
+                        {/* Action buttons */}
+                        <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Move up */}
+                          {idx > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImages((prev) => {
+                                  const next = [...prev];
+                                  [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                  return next;
+                                });
+                              }}
+                              className="p-1 rounded bg-slate-950/80 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-800/60 cursor-pointer"
+                              title="Move up"
+                            >
+                              <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                            </button>
+                          )}
+                          {/* Move down */}
+                          {idx < images.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImages((prev) => {
+                                  const next = [...prev];
+                                  [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                                  return next;
+                                });
+                              }}
+                              className="p-1 rounded bg-slate-950/80 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-800/60 cursor-pointer"
+                              title="Move down"
+                            >
+                              <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                          )}
+                          {/* Remove */}
+                          <button
+                            type="button"
+                            onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                            className="p-1 rounded bg-slate-950/80 text-rose-400 hover:text-rose-300 backdrop-blur-sm border border-slate-800/60 cursor-pointer"
+                            title="Remove image"
+                          >
+                            <XIcon />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
                 <label
@@ -501,34 +566,37 @@ export default function AdminProductsPage() {
                       <svg xmlns="http://www.w3.org/2000/svg" className="size-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                       </svg>
-                      {form.imageUrl ? "Change image" : "Upload image"}
+                      إضافة صورة
                     </>
                   )}
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
                     disabled={imageUploading}
                     onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
+                      const files = e.target.files;
+                      if (!files || files.length === 0) return;
                       setImageUploading(true);
                       try {
-                        const base64 = await new Promise<string>((resolve, reject) => {
-                          const reader = new FileReader();
-                          reader.readAsDataURL(file);
-                          reader.onload = () => resolve(reader.result as string);
-                          reader.onerror = reject;
-                        });
-                        const res = await fetch("/api/upload", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ image: base64 }),
-                        });
-                        if (!res.ok) throw new Error();
-                        const data = await res.json();
-                        setForm((prev) => ({ ...prev, imageUrl: data.url }));
-                        pushToast("Image uploaded", "success");
+                        for (const file of Array.from(files)) {
+                          const base64 = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.readAsDataURL(file);
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.onerror = reject;
+                          });
+                          const res = await fetch("/api/upload", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ image: base64 }),
+                          });
+                          if (!res.ok) throw new Error();
+                          const data = await res.json();
+                          setImages((prev) => [...prev, data.url]);
+                        }
+                        pushToast("Image(s) uploaded", "success");
                       } catch {
                         pushToast("Failed to upload image", "error");
                       } finally {

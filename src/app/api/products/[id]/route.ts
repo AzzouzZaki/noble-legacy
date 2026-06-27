@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { products, productSizes } from "@/db/schema";
+import { products, productSizes, productImages } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 // GET /api/products/:id
@@ -25,7 +25,13 @@ export async function GET(
       .from(productSizes)
       .where(eq(productSizes.productId, parseInt(id)));
 
-    return NextResponse.json({ ...product[0], sizes });
+    const images = await db
+      .select()
+      .from(productImages)
+      .where(eq(productImages.productId, parseInt(id)))
+      .orderBy(productImages.position);
+
+    return NextResponse.json({ ...product[0], sizes, images });
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch product" },
@@ -42,7 +48,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, price, stock, imageUrl, sizes } = body;
+    const { name, description, price, stock, imageUrl, sizes, images } = body;
 
     const [updated] = await db
       .update(products)
@@ -66,6 +72,22 @@ export async function PUT(
       }
     }
 
+    if (images) {
+      await db
+        .delete(productImages)
+        .where(eq(productImages.productId, parseInt(id)));
+
+      if (images.length > 0) {
+        await db.insert(productImages).values(
+          images.map((img: { url: string; position: number }) => ({
+            productId: parseInt(id),
+            url: img.url,
+            position: img.position,
+          }))
+        );
+      }
+    }
+
     return NextResponse.json(updated);
   } catch (error) {
     return NextResponse.json(
@@ -82,6 +104,10 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    await db
+      .delete(productImages)
+      .where(eq(productImages.productId, parseInt(id)));
+
     await db
       .delete(productSizes)
       .where(eq(productSizes.productId, parseInt(id)));

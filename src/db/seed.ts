@@ -1,100 +1,90 @@
-import "dotenv/config";
 import { db } from "./index";
-import {
-  products,
-  productSizes,
-  orders,
-  orderItems,
-  adminUsers,
-} from "./schema";
-import { faker } from "@faker-js/faker";
-import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
+import { products, productSizes, productImages, orders, orderItems } from "./schema";
+import { uploadImage } from "../lib/cloudinary";
+import "dotenv/config";
+
+async function fetchImageAsBase64(url: string): Promise<string> {
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString("base64");
+  const mimeType = "image/jpeg";
+  return `data:${mimeType};base64,${base64}`;
+}
+
+const seedProducts = [
+  { name: "تيشيرت أوفرسايز بروكلين", type: "adult", price: "2800" },
+  { name: "تيشيرت ستريتوير فايت", type: "adult", price: "2800" },
+  { name: "تيشيرت باكي هانما", type: "adult", price: "3200" },
+  { name: "تيشيرت ستاند الون", type: "adult", price: "2800" },
+  { name: "تيشيرت أطفال ديناصور", type: "kids", price: "1800" },
+  { name: "تيشيرت أطفال سوبر هيرو", type: "kids", price: "1800" },
+];
+
+const adultSizes = ["S", "M", "L", "XL", "XXL"];
+const kidsSizes = ["2-3Y", "4-5Y", "6-7Y", "8-9Y"];
+
+function getRandomInt(min: number, max: number) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
 async function seed() {
-  console.log("Seeding database...");
+  console.log("🌱 Seeding database...");
 
-  // Clear existing data
-  await db.delete(orderItems);
+  // clear existing seed data (optional — delete in reverse FK order)
+  await db.delete(productImages);
   await db.delete(productSizes);
+  await db.delete(orderItems);
   await db.delete(orders);
   await db.delete(products);
-  await db.delete(adminUsers);
 
-  // Seed Admin User
-  const passwordHash = await bcrypt.hash("admin", 10);
-  await db.insert(adminUsers).values({
-    username: "admin",
-    passwordHash: passwordHash,
-  });
+  let imageCounter = 1;
 
-  // Seed Products and Sizes
-  const createdProducts = [];
-  for (let i = 0; i < 10; i++) {
-    const [product] = await db
+  for (const p of seedProducts) {
+    console.log(`Uploading images for ${p.name}...`);
+    const imageUrls: string[] = [];
+    
+    for (let i = 0; i < 3; i++) {
+      const base64Image = await fetchImageAsBase64(`https://picsum.photos/800/800?random=${imageCounter}`);
+      const cloudinaryUrl = await uploadImage(base64Image);
+      imageUrls.push(cloudinaryUrl);
+      imageCounter++;
+    }
+
+    console.log(`Inserting product ${p.name}...`);
+    const [insertedProduct] = await db
       .insert(products)
       .values({
-        name: faker.commerce.productName(),
-        description: faker.commerce.productDescription(),
-        price: faker.commerce.price({ min: 10, max: 200 }),
-        stock: faker.number.int({ min: 0, max: 100 }),
-        imageUrl: faker.image.url(),
-      })
-      .returning();
-    createdProducts.push(product);
-
-    const sizes = ["S", "M", "L", "XL"];
-    for (const size of sizes) {
-      await db.insert(productSizes).values({
-        productId: product.id,
-        size: size,
-        stock: faker.number.int({ min: 0, max: 50 }),
-      });
-    }
-  }
-
-  // Seed Orders and Order Items
-  for (let i = 0; i < 5; i++) {
-    const [order] = await db
-      .insert(orders)
-      .values({
-        customerName: faker.person.fullName(),
-        customerPhone: faker.phone.number(),
-        customerEmail: faker.internet.email(),
-        shippingAddress: faker.location.streetAddress(),
-        totalAmount: "0", // Will be updated after creating items
-        status: faker.helpers.arrayElement(["pending", "shipped", "delivered"]),
+        name: p.name,
+        price: p.price,
+        imageUrl: imageUrls[0], // First image as fallback/primary
+        stock: 0, // We'll rely on sizes for stock mostly, but setting to 0 as default
+        description: `This is a high quality ${p.type} t-shirt.`,
       })
       .returning();
 
-    let totalAmount = 0;
-    const numItems = faker.number.int({ min: 1, max: 3 });
-    for (let j = 0; j < numItems; j++) {
-      const randomProduct = faker.helpers.arrayElement(createdProducts);
-      const quantity = faker.number.int({ min: 1, max: 5 });
-      const unitPrice = parseFloat(randomProduct.price);
-      totalAmount += quantity * unitPrice;
+    console.log(`Inserting sizes for ${p.name}...`);
+    const sizesToInsert = p.type === "adult" ? adultSizes : kidsSizes;
+    const sizesData = sizesToInsert.map(size => ({
+      productId: insertedProduct.id,
+      size: size,
+      stock: p.type === "adult" ? getRandomInt(5, 20) : getRandomInt(5, 15),
+    }));
+    await db.insert(productSizes).values(sizesData);
 
-      await db.insert(orderItems).values({
-        orderId: order.id,
-        productId: randomProduct.id,
-        size: faker.helpers.arrayElement(["S", "M", "L"]),
-        quantity: quantity,
-        unitPrice: String(unitPrice),
-      });
-    }
-
-    await db
-      .update(orders)
-      .set({ totalAmount: String(totalAmount.toFixed(2)) })
-      .where(eq(orders.id, order.id));
+    console.log(`Inserting images for ${p.name}...`);
+    const imagesData = imageUrls.map((url, index) => ({
+      productId: insertedProduct.id,
+      url: url,
+      position: index,
+    }));
+    await db.insert(productImages).values(imagesData);
   }
 
-  console.log("Database seeded successfully!");
+  console.log("✅ Done!");
   process.exit(0);
 }
 
-seed().catch((error) => {
-  console.error("Error seeding database:", error);
+seed().catch((err) => {
+  console.error("❌ Seed failed:", err);
   process.exit(1);
 });

@@ -23,3 +23,94 @@ body {
   color: var(--foreground);
   font-family: var(--font-tajawal);
 }
+
+/* ── Hero animations ── */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+
+@keyframes soft-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.75; }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(12px, -18px) scale(1.04); }
+  66%      { transform: translate(-8px, 10px) scale(0.97); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s ease-out both;
+}
+
+.animate-fade-up-delay-1 {
+  animation: fade-up 0.7s ease-out 0.15s both;
+}
+
+.animate-fade-up-delay-2 {
+  animation: fade-up 0.7s ease-out 0.3s both;
+}
+
+.animate-fade-up-delay-3 {
+  animation: fade-up 0.7s ease-out 0.45s both;
+}
+
+.animate-fade-up-delay-4 {
+  animation: fade-up 0.7s ease-out 0.6s both;
+}
+
+.animate-float-slow {
+  animation: float-slow 5s ease-in-out infinite;
+}
+
+.animate-float-slow-alt {
+  animation: float-slow 6s ease-in-out 1s infinite;
+}
+
+.animate-soft-pulse {
+  animation: soft-pulse 4s ease-in-out infinite;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.8s ease-out 0.3s both;
+}
+
+.animate-blob-drift {
+  animation: blob-drift 8s ease-in-out infinite;
+}
+
+.animate-blob-drift-alt {
+  animation: blob-drift 10s ease-in-out 2s infinite;
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-up-delay-1,
+  .animate-fade-up-delay-2,
+  .animate-fade-up-delay-3,
+  .animate-fade-up-delay-4,
+  .animate-float-slow,
+  .animate-float-slow-alt,
+  .animate-soft-pulse,
+  .animate-slide-in-right,
+  .animate-blob-drift,
+  .animate-blob-drift-alt {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

@@ -11,6 +11,9 @@ import {
   getCartTotal,
 } from "@/lib/cart";
 import { formatPrice } from "@/lib/utils";
+import ZimouOfficeSelect, {
+  ZimouDeliveryChoice,
+} from "@/components/store/ZimouOfficeSelect";
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -22,19 +25,24 @@ export default function CartPage() {
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState<"home" | "office" | null>("home");
+  const [selectedDelivery, setSelectedDelivery] = useState<ZimouDeliveryChoice | null>(null);
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  useEffect(() => {
-    setIsMounted(true);
-    refreshCart();
-  }, []);
-
   const refreshCart = () => {
     setCartItems(getCart());
   };
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setIsMounted(true);
+      refreshCart();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   const dispatchCartUpdate = () => {
     window.dispatchEvent(new Event("cart-updated"));
@@ -61,7 +69,8 @@ export default function CartPage() {
     if (!deliveryMethod) errors.deliveryMethod = "يرجى اختيار طريقة التوصيل";
     if (!fullName.trim()) errors.fullName = "الاسم الكامل مطلوب";
     if (!phone.trim()) errors.phone = "رقم الهاتف مطلوب";
-    if (!address.trim()) errors.address = "عنوان التوصيل مطلوب";
+    if (deliveryMethod === "home" && !address.trim()) errors.address = "عنوان التوصيل مطلوب";
+    if (!selectedDelivery) errors.delivery = "يرجى اختيار تفاصيل التوصيل";
     
     if (email.trim() && !/^\S+@\S+\.\S+$/.test(email)) {
       errors.email = "البريد الإلكتروني غير صالح";
@@ -79,13 +88,18 @@ export default function CartPage() {
     setIsSubmitting(true);
     setSubmitError(null);
 
-    const totalAmount = getCartTotal(cartItems);
+    const subtotal = getCartTotal(cartItems);
+    const deliveryPrice = selectedDelivery?.price ?? 0;
+    const totalAmount = subtotal + deliveryPrice;
+    const deliveryDetails = selectedDelivery
+      ? `التوصيل: ${selectedDelivery.label} - ${selectedDelivery.communeName}, ${selectedDelivery.wilayaName} - سعر التوصيل: ${formatPrice(selectedDelivery.price)}`
+      : "";
 
     const payload = {
       customerName: fullName,
       customerPhone: phone,
       customerEmail: email || null,
-      shippingAddress: deliveryMethod === "home" ? `[التوصيل إلى المنزل] ${address}` : `[التوصيل إلى المكتب] ${address}`,
+      shippingAddress: deliveryMethod === "home" ? `[التوصيل إلى المنزل] ${address} - ${deliveryDetails}` : `[التوصيل إلى المكتب] ${deliveryDetails}`,
       totalAmount: String(totalAmount),
       items: cartItems.map(item => ({
         productId: item.productId,
@@ -153,6 +167,8 @@ export default function CartPage() {
   }
 
   const subtotal = getCartTotal(cartItems);
+  const deliveryPrice = selectedDelivery?.price ?? 0;
+  const orderTotal = subtotal + deliveryPrice;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 min-h-screen">
@@ -228,9 +244,19 @@ export default function CartPage() {
           <div className="bg-neutral-50 rounded-xl p-6 border border-divider sticky top-24">
             <h2 className="text-xl font-bold text-primary font-tajawal mb-6 pb-4 border-b border-divider">ملخص الطلب</h2>
             
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-muted-text font-bold font-tajawal">الإجمالي</span>
-              <span className="text-2xl font-extrabold text-primary font-tajawal">{formatPrice(subtotal)}</span>
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-text font-bold font-tajawal">المجموع الفرعي</span>
+                <span className="font-bold text-primary font-tajawal">{formatPrice(subtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-text font-bold font-tajawal">سعر التوصيل</span>
+                <span className="font-bold text-primary font-tajawal">{formatPrice(deliveryPrice)}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-divider pt-3">
+                <span className="text-muted-text font-bold font-tajawal">الإجمالي</span>
+                <span className="text-2xl font-extrabold text-primary font-tajawal">{formatPrice(orderTotal)}</span>
+              </div>
             </div>
 
             <form onSubmit={handleSubmitOrder} className="space-y-4">
@@ -246,6 +272,7 @@ export default function CartPage() {
                   <div
                     onClick={() => {
                       setDeliveryMethod("home");
+                      setSelectedDelivery(null);
                       setFormErrors(prev => ({ ...prev, deliveryMethod: "" }));
                     }}
                     tabIndex={0}
@@ -253,6 +280,7 @@ export default function CartPage() {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setDeliveryMethod("home");
+                        setSelectedDelivery(null);
                         setFormErrors(prev => ({ ...prev, deliveryMethod: "" }));
                       }
                     }}
@@ -264,6 +292,7 @@ export default function CartPage() {
                   <div
                     onClick={() => {
                       setDeliveryMethod("office");
+                      setSelectedDelivery(null);
                       setFormErrors(prev => ({ ...prev, deliveryMethod: "" }));
                     }}
                     tabIndex={0}
@@ -271,6 +300,7 @@ export default function CartPage() {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setDeliveryMethod("office");
+                        setSelectedDelivery(null);
                         setFormErrors(prev => ({ ...prev, deliveryMethod: "" }));
                       }
                     }}
@@ -308,19 +338,31 @@ export default function CartPage() {
                 {formErrors.phone && <p className="text-red-500 text-xs mt-1 font-bold font-tajawal">{formErrors.phone}</p>}
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-primary mb-1.5 font-tajawal">
-                  {deliveryMethod === "home" ? "عنوان المنزل *" : "عنوان المكتب *"}
-                </label>
-                <textarea
-                  value={address}
-                  onChange={e => setAddress(e.target.value)}
-                  rows={2}
-                  className={`w-full p-3 rounded-lg border bg-white ${formErrors.address ? 'border-red-500 ring-1 ring-red-500' : 'border-divider focus:border-black focus:ring-1 focus:ring-black'} outline-none transition-all resize-none text-primary placeholder-neutral-400`}
-                  placeholder={deliveryMethod === "home" ? "اكتب عنوان المنزل بالتفصيل" : "اكتب عنوان المكتب أو اسم المكتب والمنطقة بالتفصيل"}
-                />
-                {formErrors.address && <p className="text-red-500 text-xs mt-1 font-bold font-tajawal">{formErrors.address}</p>}
-              </div>
+              {deliveryMethod === "home" && (
+                <div>
+                  <label className="block text-sm font-bold text-primary mb-1.5 font-tajawal">
+                    عنوان المنزل *
+                  </label>
+                  <textarea
+                    value={address}
+                    onChange={e => setAddress(e.target.value)}
+                    rows={2}
+                    className={`w-full p-3 rounded-lg border bg-white ${formErrors.address ? 'border-red-500 ring-1 ring-red-500' : 'border-divider focus:border-black focus:ring-1 focus:ring-black'} outline-none transition-all resize-none text-primary placeholder-neutral-400`}
+                    placeholder="اكتب عنوان المنزل بالتفصيل"
+                  />
+                  {formErrors.address && <p className="text-red-500 text-xs mt-1 font-bold font-tajawal">{formErrors.address}</p>}
+                </div>
+              )}
+
+              <ZimouOfficeSelect
+                mode={deliveryMethod === "home" ? "home" : "office"}
+                selectedChoice={selectedDelivery}
+                onSelectChoice={(choice) => {
+                  setSelectedDelivery(choice);
+                  setFormErrors((prev) => ({ ...prev, delivery: "" }));
+                }}
+                error={formErrors.delivery}
+              />
 
               <div>
                 <label className="block text-sm font-bold text-primary mb-1.5 font-tajawal">البريد الإلكتروني (اختياري)</label>

@@ -34,7 +34,7 @@ export default function RootLayout({
       dir="rtl"
       className={`${geistSans.variable} ${geistMono.variable} ${tajawal.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-tajawal text-primary bg-white">{children}</body>
+      <body suppressHydrationWarning className="min-h-full flex flex-col font-tajawal text-primary bg-white">{children}</body>
     </html>
   );
 }

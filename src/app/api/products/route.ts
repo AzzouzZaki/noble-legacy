@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { products, productSizes } from "@/db/schema";
+import { products, productSizes, productImages } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 
 // GET /api/products
@@ -8,6 +8,7 @@ export async function GET() {
   try {
     const allProducts = await db.select().from(products).orderBy(asc(products.id));
     const allSizes = await db.select().from(productSizes);
+    const allImages = await db.select().from(productImages).orderBy(asc(productImages.position));
 
     const productsWithSizes = allProducts.map((p) => {
       const sizes = allSizes
@@ -17,7 +18,14 @@ export async function GET() {
           size: s.size,
           stock: s.stock,
         }));
-      return { ...p, sizes };
+      const images = allImages
+        .filter((img) => img.productId === p.id)
+        .map((img) => ({
+          id: img.id,
+          url: img.url,
+          position: img.position,
+        }));
+      return { ...p, sizes, images };
     });
 
     return NextResponse.json(productsWithSizes);
@@ -33,7 +41,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, price, stock, imageUrl, sizes } = body;
+    const { name, description, price, stock, imageUrl, sizes, images } = body;
 
     const [newProduct] = await db
       .insert(products)
@@ -46,6 +54,16 @@ export async function POST(request: NextRequest) {
           productId: newProduct.id,
           size: s.size,
           stock: s.stock,
+        }))
+      );
+    }
+
+    if (images && images.length > 0) {
+      await db.insert(productImages).values(
+        images.map((img: { url: string; position: number }) => ({
+          productId: newProduct.id,
+          url: img.url,
+          position: img.position,
         }))
       );
     }

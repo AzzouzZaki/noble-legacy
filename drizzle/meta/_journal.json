@@ -8,6 +8,20 @@
       "when": 1781656507781,
       "tag": "0000_omniscient_green_goblin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782432076194,
+      "tag": "0001_aberrant_northstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782501985025,
+      "tag": "0002_sturdy_iceman",
+      "breakpoints": true
     }
   ]
 }
