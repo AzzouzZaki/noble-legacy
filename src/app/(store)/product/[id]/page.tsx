@@ -50,6 +50,9 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
+  // Order form visibility
+  const [showOrderForm, setShowOrderForm] = useState(false);
+
   // Form states
   const [deliveryType, setDeliveryType] = useState<"home" | "pickup">("home");
   const [fullName, setFullName] = useState("");
@@ -139,9 +142,9 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
       return;
     }
     setSizeError(null);
-
-    // Scroll to form smoothly
-    orderFormRef.current?.scrollIntoView({ behavior: "smooth" });
+    setShowOrderForm(true);
+    // Scroll to form smoothly after it renders
+    setTimeout(() => orderFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
   const handleQtyChange = (val: number) => {
@@ -368,187 +371,203 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
         </div>
       </div>
 
-      {/* Order Form Section */}
-      <div
-        ref={orderFormRef}
-        id="order-form"
-        className="pt-16 border-t border-divider max-w-3xl mx-auto"
-      >
-        <h2 className="text-2xl font-bold text-primary mb-8 font-tajawal text-center md:text-right">
-          أكمل طلبك
-        </h2>
-
-        {orderSuccess ? (
-          <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl p-8 text-center space-y-4 shadow-sm">
-            <svg className="w-12 h-12 text-green-500 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-lg font-bold font-tajawal">
-              ✓ تم استلام طلبك بنجاح! سنتواصل معك قريباً.
-            </p>
+      {/* Order Form Section — shown only after clicking Order Now */}
+      {showOrderForm && (
+        <div
+          ref={orderFormRef}
+          id="order-form"
+          className="pt-16 border-t border-divider max-w-3xl mx-auto animate-fade-up"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold text-primary font-tajawal">
+              أكمل طلبك
+            </h2>
             <button
-              onClick={() => setOrderSuccess(false)}
-              className="mt-2 text-sm text-green-700 underline font-semibold font-tajawal"
+              type="button"
+              onClick={() => setShowOrderForm(false)}
+              className="text-muted-text hover:text-primary transition-colors text-sm font-medium font-tajawal flex items-center gap-1"
             >
-              طلب منتج آخر أو مقاس جديد
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              إغلاق
             </button>
           </div>
-        ) : (
-          <form onSubmit={handleOrderSubmit} className="space-y-6">
-            
-            {orderError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm font-medium font-tajawal">
-                {orderError}
-              </div>
-            )}
 
-            {/* Delivery Type Toggle */}
-            <div className="space-y-3">
-              <label className="text-sm font-bold text-primary block font-tajawal">
-                طريقة التوصيل
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                
-                {/* Home Delivery Card */}
-                <div
-                  onClick={() => {
-                    setDeliveryType("home");
-                    setSelectedDelivery(null);
-                  }}
-                  className={`
-                    border-2 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200 bg-white
-                    ${deliveryType === "home" ? "border-black shadow-sm" : "border-neutral-200 hover:border-neutral-300"}
-                  `}
-                >
-                  <span className="text-2xl">🏠</span>
-                  <span className="text-sm font-bold font-tajawal">توصيل للمنزل</span>
+          {orderSuccess ? (
+            <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl p-8 text-center space-y-4 shadow-sm">
+              <svg className="w-12 h-12 text-green-500 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-lg font-bold font-tajawal">
+                ✓ تم استلام طلبك بنجاح! سنتواصل معك قريباً.
+              </p>
+              <button
+                onClick={() => { setOrderSuccess(false); setShowOrderForm(false); }}
+                className="mt-2 text-sm text-green-700 underline font-semibold font-tajawal"
+              >
+                طلب منتج آخر أو مقاس جديد
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleOrderSubmit} className="space-y-6">
+              
+              {orderError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm font-medium font-tajawal">
+                  {orderError}
                 </div>
-
-                {/* Pickup Card */}
-                <div
-                  onClick={() => {
-                    setDeliveryType("pickup");
-                    setSelectedDelivery(null);
-                  }}
-                  className={`
-                    border-2 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200 bg-white
-                    ${deliveryType === "pickup" ? "border-black shadow-sm" : "border-neutral-200 hover:border-neutral-300"}
-                  `}
-                >
-                  <span className="text-2xl">🏢</span>
-                  <span className="text-sm font-bold font-tajawal">استلام من مكتب التوصيل</span>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Full Name */}
-            <div className="space-y-2">
-              <label htmlFor="fullName" className="text-sm font-bold text-primary block font-tajawal">
-                الاسم الكامل
-              </label>
-              <input
-                id="fullName"
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className={`
-                  w-full bg-white border rounded-lg px-4 py-3 text-sm text-primary placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all
-                  ${formErrors.fullName ? "border-red-500 ring-1 ring-red-500" : "border-neutral-300"}
-                `}
-                placeholder="محمد بن عمر"
-              />
-              {formErrors.fullName && (
-                <span className="text-xs font-semibold text-red-600 block mt-1 font-tajawal">
-                  {formErrors.fullName}
-                </span>
               )}
-            </div>
 
-            {/* Phone Number */}
-            <div className="space-y-2">
-              <label htmlFor="phone" className="text-sm font-bold text-primary block font-tajawal">
-                رقم الهاتف
-              </label>
-              <input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className={`
-                  w-full bg-white border rounded-lg px-4 py-3 text-sm text-primary placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all
-                  ${formErrors.phone ? "border-red-500 ring-1 ring-red-500" : "border-neutral-300"}
-                `}
-                placeholder="0550123456"
-              />
-              {formErrors.phone && (
-                <span className="text-xs font-semibold text-red-600 block mt-1 font-tajawal">
-                  {formErrors.phone}
-                </span>
-              )}
-            </div>
-
-            {/* Conditional Address (Home Delivery only) */}
-            {deliveryType === "home" && (
-              <div className="space-y-2">
-                <label htmlFor="address" className="text-sm font-bold text-primary block font-tajawal">
-                  العنوان
+              {/* Delivery Type Toggle */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-primary block font-tajawal">
+                  طريقة التوصيل
                 </label>
-                <textarea
-                  id="address"
-                  rows={3}
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                <div className="grid grid-cols-2 gap-4">
+                  
+                  {/* Home Delivery Card */}
+                  <div
+                    onClick={() => {
+                      setDeliveryType("home");
+                      setSelectedDelivery(null);
+                    }}
+                    className={`
+                      border-2 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200 bg-white
+                      ${deliveryType === "home" ? "border-black shadow-sm" : "border-neutral-200 hover:border-neutral-300"}
+                    `}
+                  >
+                    <span className="text-2xl">🏠</span>
+                    <span className="text-sm font-bold font-tajawal">توصيل للمنزل</span>
+                  </div>
+
+                  {/* Pickup Card */}
+                  <div
+                    onClick={() => {
+                      setDeliveryType("pickup");
+                      setSelectedDelivery(null);
+                    }}
+                    className={`
+                      border-2 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200 bg-white
+                      ${deliveryType === "pickup" ? "border-black shadow-sm" : "border-neutral-200 hover:border-neutral-300"}
+                    `}
+                  >
+                    <span className="text-2xl">🏢</span>
+                    <span className="text-sm font-bold font-tajawal">استلام من مكتب التوصيل</span>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Full Name */}
+              <div className="space-y-2">
+                <label htmlFor="fullName" className="text-sm font-bold text-primary block font-tajawal">
+                  الاسم الكامل
+                </label>
+                <input
+                  id="fullName"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   className={`
-                    w-full bg-white border rounded-lg px-4 py-3 text-sm text-primary placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all resize-none
-                    ${formErrors.address ? "border-red-500 ring-1 ring-red-500" : "border-neutral-300"}
+                    w-full bg-white border rounded-lg px-4 py-3 text-sm text-primary placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all
+                    ${formErrors.fullName ? "border-red-500 ring-1 ring-red-500" : "border-neutral-300"}
                   `}
-                  placeholder="حي 5 جويلية، عمارة 3، شقة 10"
+                  placeholder="محمد بن عمر"
                 />
-                {formErrors.address && (
+                {formErrors.fullName && (
                   <span className="text-xs font-semibold text-red-600 block mt-1 font-tajawal">
-                    {formErrors.address}
+                    {formErrors.fullName}
                   </span>
                 )}
               </div>
-            )}
 
-            <ZimouOfficeSelect
-              mode={deliveryType === "home" ? "home" : "office"}
-              selectedChoice={selectedDelivery}
-              onSelectChoice={(choice) => {
-                setSelectedDelivery(choice);
-                setFormErrors((prev) => ({ ...prev, delivery: "" }));
-              }}
-              error={formErrors.delivery}
-            />
+              {/* Phone Number */}
+              <div className="space-y-2">
+                <label htmlFor="phone" className="text-sm font-bold text-primary block font-tajawal">
+                  رقم الهاتف
+                </label>
+                <input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className={`
+                    w-full bg-white border rounded-lg px-4 py-3 text-sm text-primary placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all
+                    ${formErrors.phone ? "border-red-500 ring-1 ring-red-500" : "border-neutral-300"}
+                  `}
+                  placeholder="0550123456"
+                />
+                {formErrors.phone && (
+                  <span className="text-xs font-semibold text-red-600 block mt-1 font-tajawal">
+                    {formErrors.phone}
+                  </span>
+                )}
+              </div>
 
-            <div className="rounded-lg border border-divider bg-neutral-50 p-4 space-y-2 font-tajawal">
-              <div className="flex justify-between text-sm text-muted-text">
-                <span>المجموع الفرعي</span>
-                <span className="font-bold text-primary">{formatPrice(productTotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-muted-text">
-                <span>سعر التوصيل</span>
-                <span className="font-bold text-primary">{formatPrice(deliveryPrice)}</span>
-              </div>
-              <div className="flex justify-between border-t border-divider pt-2 text-base font-extrabold text-primary">
-                <span>الإجمالي</span>
-                <span>{formatPrice(orderTotal)}</span>
-              </div>
-            </div>
+              {/* Delivery company / office selector — always shown first */}
+              <ZimouOfficeSelect
+                mode={deliveryType === "home" ? "home" : "office"}
+                selectedChoice={selectedDelivery}
+                onSelectChoice={(choice) => {
+                  setSelectedDelivery(choice);
+                  setFormErrors((prev) => ({ ...prev, delivery: "" }));
+                }}
+                error={formErrors.delivery}
+              />
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={formSubmitting}
-              className="w-full bg-black hover:bg-neutral-900 text-white font-bold py-4 rounded-lg transition-colors duration-200 cursor-pointer disabled:opacity-50 font-tajawal text-center flex items-center justify-center"
-            >
-              {formSubmitting ? "جاري تأكيد طلبك..." : "تأكيد الطلب"}
-            </button>
-          </form>
-        )}
-      </div>
+              {/* Address — only for home delivery, shown AFTER delivery is chosen */}
+              {deliveryType === "home" && selectedDelivery && (
+                <div className="space-y-2 animate-fade-up">
+                  <label htmlFor="address" className="text-sm font-bold text-primary block font-tajawal">
+                    عنوان المنزل التفصيلي
+                  </label>
+                  <textarea
+                    id="address"
+                    rows={3}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className={`
+                      w-full bg-white border rounded-lg px-4 py-3 text-sm text-primary placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all resize-none
+                      ${formErrors.address ? "border-red-500 ring-1 ring-red-500" : "border-neutral-300"}
+                    `}
+                    placeholder="حي 5 جويلية، عمارة 3، شقة 10"
+                  />
+                  {formErrors.address && (
+                    <span className="text-xs font-semibold text-red-600 block mt-1 font-tajawal">
+                      {formErrors.address}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Order Summary */}
+              <div className="rounded-lg border border-divider bg-neutral-50 p-4 space-y-2 font-tajawal">
+                <div className="flex justify-between text-sm text-muted-text">
+                  <span>المجموع الفرعي</span>
+                  <span className="font-bold text-primary">{formatPrice(productTotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-muted-text">
+                  <span>سعر التوصيل</span>
+                  <span className="font-bold text-primary">{formatPrice(deliveryPrice)}</span>
+                </div>
+                <div className="flex justify-between border-t border-divider pt-2 text-base font-extrabold text-primary">
+                  <span>الإجمالي</span>
+                  <span>{formatPrice(orderTotal)}</span>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={formSubmitting}
+                className="w-full bg-black hover:bg-neutral-900 text-white font-bold py-4 rounded-lg transition-colors duration-200 cursor-pointer disabled:opacity-50 font-tajawal text-center flex items-center justify-center"
+              >
+                {formSubmitting ? "جاري تأكيد طلبك..." : "تأكيد الطلب"}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
     </div>
   );
