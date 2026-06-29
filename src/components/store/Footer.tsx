@@ -28,18 +28,18 @@ const legalLinks = [
 export default function Footer() {
   return (
     <footer className="bg-white border-t border-divider text-primary font-tajawal">
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
+      <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-7">
         
         {/* Level 1: Top Information Grid */}
-        <div className="grid grid-cols-3 gap-4 sm:gap-8 lg:gap-12">
+        <div className="grid w-full grid-cols-3 justify-items-stretch gap-3 sm:gap-6 lg:gap-8">
           
           {/* Column 1: Store Links */}
-          <div className="space-y-2 sm:space-y-3">
-            <h3 className="text-xs font-medium text-muted-text">المتجر</h3>
-            <ul className="space-y-2 sm:space-y-3">
+          <div className="min-w-0 space-y-1.5 sm:space-y-2">
+            <h3 className="truncate text-xs font-medium text-muted-text">المتجر</h3>
+            <ul className="space-y-1.5 sm:space-y-2">
               {storeLinks.map((link) => (
                 <li key={link.name}>
-                  <Link href={link.href} className="text-xs sm:text-sm font-medium hover:text-black transition-colors duration-200">
+                  <Link href={link.href} className="block truncate text-[11px] sm:text-sm font-medium hover:text-black transition-colors duration-200">
                     {link.name}
                   </Link>
                 </li>
@@ -48,18 +48,18 @@ export default function Footer() {
           </div>
 
           {/* Column 2: Contact Information */}
-          <div className="space-y-2 sm:space-y-3">
-            <h3 className="text-xs font-medium text-muted-text">تواصل معنا</h3>
-            <ul className="space-y-2 sm:space-y-3">
-              {contactInfo.map((info) => (
-                <li key={info.label} className="text-xs sm:text-sm font-medium">
-                  <span className="block text-xs text-muted-text mb-1">{info.label}</span>
+          <div className="min-w-0 space-y-1.5 text-center sm:space-y-2">
+            <h3 className="truncate text-xs font-medium text-muted-text">تواصل معنا</h3>
+            <ul className="space-y-1.5 sm:space-y-2">
+              {contactInfo.map((info, index) => (
+                <li key={info.label} className={`${index > 1 ? "hidden sm:block" : ""} min-w-0 truncate text-[11px] sm:text-sm font-medium`}>
+                  <span className="hidden truncate text-xs text-muted-text mb-1 sm:block">{info.label}</span>
                   {info.href ? (
-                    <a href={info.href} className="hover:text-black transition-colors duration-200" dir="ltr" style={{ display: 'inline-block' }}>
+                    <a href={info.href} className="inline-block max-w-full truncate hover:text-black transition-colors duration-200" dir="ltr">
                       {info.value}
                     </a>
                   ) : (
-                    <span>{info.value}</span>
+                    <span className="block truncate">{info.value}</span>
                   )}
                 </li>
               ))}
@@ -67,9 +67,9 @@ export default function Footer() {
           </div>
 
           {/* Column 3: Social Media */}
-          <div className="space-y-2 sm:space-y-3">
-            <h3 className="text-xs font-medium text-muted-text">تابعنا</h3>
-            <ul className="space-y-2 sm:space-y-3">
+          <div className="min-w-0 space-y-1.5 text-left sm:space-y-2">
+            <h3 className="truncate text-xs font-medium text-muted-text">تابعنا</h3>
+            <ul className="space-y-1.5 sm:space-y-2">
               {socialLinks.map((social) => (
                 <li key={social.name}>
                   <a 
@@ -77,14 +77,9 @@ export default function Footer() {
                     target="_blank" 
                     rel="noopener noreferrer" 
                     aria-label={social.ariaLabel}
-                    className="group inline-flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium hover:text-black transition-colors duration-200"
+                    className="block max-w-full truncate text-[11px] font-medium hover:text-black transition-colors duration-200 sm:text-sm"
                   >
-                    <span>{social.name}</span>
-                    <span className="opacity-0 translate-x-2 rtl:-translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 rtl:group-hover:translate-x-0 transition-all duration-300">
-                      <svg className="w-3 h-3 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                      </svg>
-                    </span>
+                    {social.name}
                   </a>
                 </li>
               ))}
@@ -94,23 +89,23 @@ export default function Footer() {
         </div>
 
         {/* Level 2: Large Centered Logo */}
-        <div className="mt-10 flex justify-center border-t border-divider pt-8">
+        <div className="mt-5 hidden justify-center border-t border-divider pt-4 sm:flex">
           <Link href="/" className="group text-center focus:outline-none rounded-lg focus:ring-2 focus:ring-black focus:ring-offset-4">
-            <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-primary group-hover:opacity-80 transition-opacity duration-300">
+            <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-primary group-hover:opacity-80 transition-opacity duration-300">
               العريقة
             </h2>
-            <p className="text-[10px] md:text-xs text-muted-text mt-2 tracking-[0.3em] uppercase font-medium">
+            <p className="text-[9px] md:text-[10px] text-muted-text mt-1 tracking-[0.22em] uppercase font-medium">
               Noble Legacy
             </p>
           </Link>
         </div>
 
         {/* Level 3: Bottom Legal Row */}
-        <div className="mt-8 flex flex-col gap-4 border-t border-divider pt-5 text-xs text-muted-text md:flex-row md:items-center md:justify-between">
+        <div className="mt-4 flex flex-col gap-2 border-t border-divider pt-3 text-[10px] text-muted-text sm:mt-5 sm:gap-3 sm:pt-4 sm:text-xs md:flex-row md:items-center md:justify-between">
           <div className="text-center md:text-right">
             © {new Date().getFullYear()} العريقة. جميع الحقوق محفوظة.
           </div>
-          <div className="flex flex-wrap justify-center gap-6">
+          <div className="flex flex-wrap justify-center gap-3 sm:gap-6">
             {legalLinks.map((link) => (
               <Link key={link.name} href={link.href} className="hover:text-black transition-colors duration-200">
                 {link.name}

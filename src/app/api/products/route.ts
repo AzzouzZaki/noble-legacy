@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { products, productSizes, productImages } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { products, productSizes, productImages, productColors } from "@/db/schema";
+import { asc } from "drizzle-orm";
 
 // GET /api/products
 export async function GET() {
@@ -9,6 +9,7 @@ export async function GET() {
     const allProducts = await db.select().from(products).orderBy(asc(products.id));
     const allSizes = await db.select().from(productSizes);
     const allImages = await db.select().from(productImages).orderBy(asc(productImages.position));
+    const allColors = await db.select().from(productColors);
 
     const productsWithSizes = allProducts.map((p) => {
       const sizes = allSizes
@@ -16,7 +17,6 @@ export async function GET() {
         .map((s) => ({
           id: s.id,
           size: s.size,
-          stock: s.stock,
         }));
       const images = allImages
         .filter((img) => img.productId === p.id)
@@ -25,7 +25,14 @@ export async function GET() {
           url: img.url,
           position: img.position,
         }));
-      return { ...p, sizes, images };
+      const colors = allColors
+        .filter((color) => color.productId === p.id)
+        .map((color) => ({
+          id: color.id,
+          name: color.name,
+          value: color.value,
+        }));
+      return { ...p, sizes, images, colors };
     });
 
     return NextResponse.json(productsWithSizes);
@@ -41,19 +48,18 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, price, stock, imageUrl, sizes, images } = body;
+    const { name, description, price, imageUrl, sizes, images, colors } = body;
 
     const [newProduct] = await db
       .insert(products)
-      .values({ name, description, price, stock, imageUrl })
+      .values({ name, description, price, imageUrl })
       .returning();
 
     if (sizes && sizes.length > 0) {
       await db.insert(productSizes).values(
-        sizes.map((s: { size: string; stock: number }) => ({
+        sizes.map((s: { size: string }) => ({
           productId: newProduct.id,
           size: s.size,
-          stock: s.stock,
         }))
       );
     }
@@ -66,6 +72,20 @@ export async function POST(request: NextRequest) {
           position: img.position,
         }))
       );
+    }
+
+    if (colors && colors.length > 0) {
+      const colorRows = colors
+        .filter((color: { name?: string; value?: string }) => (color.name || color.value))
+        .map((color: { name?: string; value?: string }) => ({
+          productId: newProduct.id,
+          name: color.name?.trim() || color.value || "Color",
+          value: color.value || "#000000",
+        }));
+
+      if (colorRows.length > 0) {
+        await db.insert(productColors).values(colorRows);
+      }
     }
 
     return NextResponse.json(newProduct, { status: 201 });

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { orders, orderItems } from "@/db/schema";
-import { eq } from "drizzle-orm";
 
 // GET /api/orders
 export async function GET() {
@@ -48,12 +47,18 @@ export async function POST(request: NextRequest) {
         items.map((item: {
           productId: number;
           size: string;
+          colorName?: string | null;
+          colorValue?: string | null;
+          heightCategory?: string | null;
           quantity: number;
           unitPrice: string;
         }) => ({
           orderId: newOrder.id,
           productId: item.productId,
           size: item.size,
+          colorName: item.colorName ?? null,
+          colorValue: item.colorValue ?? null,
+          heightCategory: item.heightCategory ?? null,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
         }))
@@ -61,8 +66,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(newOrder, { status: 201 });
-  } catch (error: any) {
-    console.error('POST /api/orders error:', error, error?.stack);
+  } catch (error) {
+    console.error("POST /api/orders error:", error);
     return NextResponse.json(
       { error: "Failed to create order" },
       { status: 500 }

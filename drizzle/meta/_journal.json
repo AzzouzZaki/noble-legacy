@@ -22,6 +22,20 @@
       "when": 1782501985025,
       "tag": "0002_sturdy_iceman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782753267944,
+      "tag": "0003_good_shotgun",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782754806420,
+      "tag": "0004_wise_thundra",
+      "breakpoints": true
     }
   ]
 }

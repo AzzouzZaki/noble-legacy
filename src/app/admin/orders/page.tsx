@@ -16,6 +16,23 @@ interface Order {
   createdAt: string;
 }
 
+interface OrderDetailItem {
+  id: number;
+  productId: number;
+  size: string;
+  colorName: string | null;
+  colorValue: string | null;
+  heightCategory: "cropped" | "tall" | null;
+  quantity: number;
+  unitPrice: string;
+  productName: string | null;
+  productImageUrl: string | null;
+}
+
+interface OrderDetails extends Order {
+  items: OrderDetailItem[];
+}
+
 type Status = "pending" | "confirmed" | "shipped" | "delivered";
 
 const STATUSES: Status[] = ["pending", "confirmed", "shipped", "delivered"];
@@ -149,7 +166,7 @@ export default function OrdersPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
-  const [selectedOrderDetails, setSelectedOrderDetails] = useState<any>(null);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<OrderDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
   /* Toast helpers */
@@ -179,7 +196,11 @@ export default function OrdersPage() {
   }, [addToast]);
 
   useEffect(() => {
-    fetchOrders();
+    const timeoutId = window.setTimeout(() => {
+      fetchOrders();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [fetchOrders]);
 
   /* Status update */
@@ -519,7 +540,7 @@ export default function OrdersPage() {
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Items Ordered</h3>
                   <div className="divide-y divide-slate-800 border border-slate-800 bg-slate-900/20 rounded-2xl overflow-hidden">
                     {selectedOrderDetails.items && selectedOrderDetails.items.length > 0 ? (
-                      selectedOrderDetails.items.map((item: any) => (
+                      selectedOrderDetails.items.map((item) => (
                         <div key={item.id} className="p-4 flex items-center justify-between hover:bg-slate-900/30 transition-colors">
                           <div className="flex items-center gap-3">
                             {item.productImageUrl ? (
@@ -535,6 +556,22 @@ export default function OrdersPage() {
                               <p className="text-white font-medium text-sm line-clamp-1">{item.productName || "Deleted Product"}</p>
                               <div className="flex items-center gap-2 mt-1 text-xs text-slate-450">
                                 <span>Size: <strong className="text-slate-300">{item.size}</strong></span>
+                                {item.colorName && (
+                                  <>
+                                    <span className="text-slate-600">•</span>
+                                    <span className="inline-flex items-center gap-1">
+                                      Color:
+                                      <span className="h-3 w-3 rounded-full border border-slate-700" style={{ backgroundColor: item.colorValue ?? "#000000" }} />
+                                      <strong className="text-slate-300">{item.colorName}</strong>
+                                    </span>
+                                  </>
+                                )}
+                                {item.heightCategory && (
+                                  <>
+                                    <span className="text-slate-600">•</span>
+                                    <span>Type: <strong className="text-slate-300">{item.heightCategory === "tall" ? "Tall" : "Short / Cropped"}</strong></span>
+                                  </>
+                                )}
                                 <span className="text-slate-600">•</span>
                                 <span>Qty: <strong className="text-slate-300">{item.quantity}</strong></span>
                               </div>

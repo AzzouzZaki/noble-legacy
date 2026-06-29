@@ -6,7 +6,6 @@ import ProductCard from "@/components/store/ProductCard";
 interface SizeEntry {
   id?: number | string;
   size: string;
-  stock: number;
 }
 
 interface Product {
@@ -14,7 +13,6 @@ interface Product {
   name: string;
   description: string | null;
   price: string;
-  stock: number | null;
   imageUrl: string | null;
   sizes?: SizeEntry[];
 }

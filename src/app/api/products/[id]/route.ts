@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { products, productSizes, productImages } from "@/db/schema";
+import { products, productSizes, productImages, productColors } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 // GET /api/products/:id
@@ -31,7 +31,12 @@ export async function GET(
       .where(eq(productImages.productId, parseInt(id)))
       .orderBy(productImages.position);
 
-    return NextResponse.json({ ...product[0], sizes, images });
+    const colors = await db
+      .select()
+      .from(productColors)
+      .where(eq(productColors.productId, parseInt(id)));
+
+    return NextResponse.json({ ...product[0], sizes, images, colors });
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch product" },
@@ -48,11 +53,11 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, price, stock, imageUrl, sizes, images } = body;
+    const { name, description, price, imageUrl, sizes, images, colors } = body;
 
     const [updated] = await db
       .update(products)
-      .set({ name, description, price, stock, imageUrl })
+      .set({ name, description, price, imageUrl })
       .where(eq(products.id, parseInt(id)))
       .returning();
 
@@ -63,10 +68,9 @@ export async function PUT(
 
       if (sizes.length > 0) {
         await db.insert(productSizes).values(
-          sizes.map((s: { size: string; stock: number }) => ({
+          sizes.map((s: { size: string }) => ({
             productId: parseInt(id),
             size: s.size,
-            stock: s.stock,
           }))
         );
       }
@@ -85,6 +89,26 @@ export async function PUT(
             position: img.position,
           }))
         );
+      }
+    }
+
+    if (colors) {
+      await db
+        .delete(productColors)
+        .where(eq(productColors.productId, parseInt(id)));
+
+      if (colors.length > 0) {
+        const colorRows = colors
+          .filter((color: { name?: string; value?: string }) => (color.name || color.value))
+          .map((color: { name?: string; value?: string }) => ({
+            productId: parseInt(id),
+            name: color.name?.trim() || color.value || "Color",
+            value: color.value || "#000000",
+          }));
+
+        if (colorRows.length > 0) {
+          await db.insert(productColors).values(colorRows);
+        }
       }
     }
 
@@ -107,6 +131,10 @@ export async function DELETE(
     await db
       .delete(productImages)
       .where(eq(productImages.productId, parseInt(id)));
+
+    await db
+      .delete(productColors)
+      .where(eq(productColors.productId, parseInt(id)));
 
     await db
       .delete(productSizes)

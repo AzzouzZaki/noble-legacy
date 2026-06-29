@@ -14,7 +14,6 @@ export const products = pgTable("products", {
   name: varchar("name").notNull(),
   description: text("description"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  stock: integer("stock").default(0),
   imageUrl: varchar("image_url"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -25,7 +24,15 @@ export const productSizes = pgTable("product_sizes", {
     .notNull()
     .references(() => products.id),
   size: varchar("size").notNull(),
-  stock: integer("stock").default(0),
+});
+
+export const productColors = pgTable("product_colors", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  name: varchar("name").notNull(),
+  value: varchar("value").notNull(),
 });
 
 export const orders = pgTable("orders", {
@@ -48,6 +55,9 @@ export const orderItems = pgTable("order_items", {
     .notNull()
     .references(() => products.id),
   size: varchar("size").notNull(),
+  colorName: varchar("color_name"),
+  colorValue: varchar("color_value"),
+  heightCategory: varchar("height_category"),
   quantity: integer("quantity").notNull(),
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
 });
@@ -113,4 +123,4 @@ export const officePrices = pgTable("office_prices", {
   officePrice: decimal("office_price", { precision: 10, scale: 2 }).notNull(),
   returnPrice: decimal("return_price", { precision: 10, scale: 2 }).notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+});

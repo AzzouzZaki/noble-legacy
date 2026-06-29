@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 /* ─── Types ─── */
 interface SizeEntry {
   id?: string;
   size: string;
-  stock: number;
+}
+
+interface ColorEntry {
+  id?: string;
+  name: string;
+  value: string;
 }
 
 interface ImageEntry {
@@ -15,16 +20,22 @@ interface ImageEntry {
   position: number | null;
 }
 
+interface PendingCropImage {
+  id: string;
+  src: string;
+  name: string;
+}
+
 interface Product {
   id: number;
   name: string;
   description: string | null;
   price: string;
-  stock: number | null;
   imageUrl: string | null;
   createdAt: string;
   sizes?: SizeEntry[];
   images?: ImageEntry[];
+  colors?: ColorEntry[];
 }
 
 interface Toast {
@@ -37,7 +48,6 @@ const EMPTY_FORM = {
   name: "",
   description: "",
   price: "",
-  stock: "",
   imageUrl: "",
 };
 
@@ -95,14 +105,28 @@ export default function AdminProductsPage() {
   /* form */
   const [form, setForm] = useState(EMPTY_FORM);
   const [sizes, setSizes] = useState<SizeEntry[]>([]);
+  const [colors, setColors] = useState<ColorEntry[]>([]);
   const [images, setImages] = useState<string[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [cropQueue, setCropQueue] = useState<PendingCropImage[]>([]);
+  const [currentCrop, setCurrentCrop] = useState<PendingCropImage | null>(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropX, setCropX] = useState(0);
+  const [cropY, setCropY] = useState(0);
+  const [cropDrag, setCropDrag] = useState<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    cropX: number;
+    cropY: number;
+  } | null>(null);
+  const cropCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   /* delete confirmation */
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
 
   /* toasts */
   const [toasts, setToasts] = useState<Toast[]>([]);
-  let toastId = 0;
 
   const pushToast = useCallback((message: string, type: "success" | "error") => {
     const id = Date.now() + Math.random();
@@ -126,7 +150,11 @@ export default function AdminProductsPage() {
   }, [pushToast]);
 
   useEffect(() => {
-    fetchProducts();
+    const timeoutId = window.setTimeout(() => {
+      fetchProducts();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [fetchProducts]);
 
   /* ─── Open panel (add / edit) ─── */
@@ -134,6 +162,7 @@ export default function AdminProductsPage() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setSizes([]);
+    setColors([]);
     setImages([]);
     setPanelOpen(true);
   };
@@ -144,7 +173,6 @@ export default function AdminProductsPage() {
       name: product.name,
       description: product.description ?? "",
       price: product.price,
-      stock: product.stock?.toString() ?? "",
       imageUrl: product.imageUrl ?? "",
     });
     /* fetch full product to get sizes */
@@ -154,10 +182,9 @@ export default function AdminProductsPage() {
         const full = await res.json();
         setSizes(
           Array.isArray(full.sizes)
-            ? full.sizes.map((s: { id?: number; size: string; stock: number }, i: number) => ({
+            ? full.sizes.map((s: { id?: number; size: string }, i: number) => ({
                 id: s.id?.toString() || `size-${i}`,
                 size: s.size,
-                stock: s.stock,
               }))
             : []
         );
@@ -166,11 +193,22 @@ export default function AdminProductsPage() {
             ? full.images.map((img: { url: string }) => img.url)
             : full.imageUrl ? [full.imageUrl] : []
         );
+        setColors(
+          Array.isArray(full.colors)
+            ? full.colors.map((color: { id?: number; name: string; value: string }, i: number) => ({
+                id: color.id?.toString() || `color-${i}`,
+                name: color.name,
+                value: color.value,
+              }))
+            : []
+        );
       } else {
         setSizes([]);
+        setColors([]);
       }
     } catch {
       setSizes([]);
+      setColors([]);
       setImages([]);
     }
     setPanelOpen(true);
@@ -182,16 +220,170 @@ export default function AdminProductsPage() {
   };
 
   /* ─── Form handlers ─── */
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
 
-  const addSize = () => setSizes((s) => [...s, { id: `new-${Date.now()}-${Math.random()}`, size: "", stock: 0 }]);
+  const addSize = () => setSizes((s) => [...s, { id: `new-${Date.now()}-${Math.random()}`, size: "" }]);
   const removeSize = (idx: number) => setSizes((s) => s.filter((_, i) => i !== idx));
-  const updateSize = (idx: number, field: keyof SizeEntry, value: string | number) =>
+  const updateSize = (idx: number, field: keyof SizeEntry, value: string) =>
     setSizes((s) => s.map((entry, i) => (i === idx ? { ...entry, [field]: value } : entry)));
+  const addColor = () => setColors((c) => [...c, { id: `color-${Date.now()}-${Math.random()}`, name: "", value: "#000000" }]);
+  const removeColor = (idx: number) => setColors((c) => c.filter((_, i) => i !== idx));
+  const updateColor = (idx: number, field: keyof ColorEntry, value: string) =>
+    setColors((c) => c.map((entry, i) => (i === idx ? { ...entry, [field]: value } : entry)));
 
   /* ─── Submit (create / update) ─── */
+  const resetCropControls = () => {
+    setCropZoom(1);
+    setCropX(0);
+    setCropY(0);
+    setCropDrag(null);
+  };
+
+  const clampCropPosition = (value: number) => Math.max(-100, Math.min(100, value));
+  const clampCropZoom = (value: number) => Math.max(1, Math.min(2.5, value));
+
+  const handleCropPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setCropDrag({
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      cropX,
+      cropY,
+    });
+  };
+
+  const handleCropPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!cropDrag || cropDrag.pointerId !== event.pointerId) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const deltaX = ((event.clientX - cropDrag.startX) / rect.width) * 160;
+    const deltaY = ((event.clientY - cropDrag.startY) / rect.height) * 160;
+    setCropX(clampCropPosition(cropDrag.cropX + deltaX));
+    setCropY(clampCropPosition(cropDrag.cropY + deltaY));
+  };
+
+  const handleCropPointerEnd = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (cropDrag?.pointerId === event.pointerId) {
+      setCropDrag(null);
+    }
+  };
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+    });
+
+  const handleImageFilesSelected = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    try {
+      const pendingImages = await Promise.all(
+        Array.from(files).map(async (file) => ({
+          id: `${file.name}-${file.lastModified}-${Math.random()}`,
+          src: await readFileAsDataUrl(file),
+          name: file.name,
+        }))
+      );
+
+      setCropQueue(pendingImages.slice(1));
+      setCurrentCrop(pendingImages[0]);
+      resetCropControls();
+    } catch {
+      pushToast("Failed to read image", "error");
+    }
+  };
+
+  const closeCropModal = () => {
+    setCurrentCrop(null);
+    setCropQueue([]);
+    resetCropControls();
+  };
+
+  const loadImageElement = useCallback((src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new window.Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = src;
+    }), []);
+
+  const drawCropToCanvas = useCallback(async (canvas: HTMLCanvasElement, src: string, outputSize: number) => {
+    const image = await loadImageElement(src);
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas is not available");
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, outputSize, outputSize);
+
+    const baseScale = Math.max(outputSize / image.naturalWidth, outputSize / image.naturalHeight);
+    const scale = baseScale * cropZoom;
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    const maxOffsetX = Math.max(0, (drawWidth - outputSize) / 2);
+    const maxOffsetY = Math.max(0, (drawHeight - outputSize) / 2);
+    const drawX = (outputSize - drawWidth) / 2 + (cropX / 100) * maxOffsetX;
+    const drawY = (outputSize - drawHeight) / 2 + (cropY / 100) * maxOffsetY;
+
+    context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+  }, [cropX, cropY, cropZoom, loadImageElement]);
+
+  const buildCroppedImage = async (src: string) => {
+    const canvas = document.createElement("canvas");
+    await drawCropToCanvas(canvas, src, 1200);
+    return canvas.toDataURL("image/jpeg", 0.92);
+  };
+
+  useEffect(() => {
+    const canvas = cropCanvasRef.current;
+    if (!canvas || !currentCrop) return;
+
+    drawCropToCanvas(canvas, currentCrop.src, 800).catch(() => {
+      pushToast("Failed to preview image crop", "error");
+    });
+  }, [currentCrop, drawCropToCanvas, pushToast]);
+
+  const confirmCropUpload = async () => {
+    if (!currentCrop) return;
+
+    setImageUploading(true);
+    try {
+      const croppedBase64 = await buildCroppedImage(currentCrop.src);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: croppedBase64 }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setImages((prev) => [...prev, data.url]);
+
+      const [nextImage, ...remainingImages] = cropQueue;
+      if (nextImage) {
+        setCurrentCrop(nextImage);
+        setCropQueue(remainingImages);
+        resetCropControls();
+      } else {
+        setCurrentCrop(null);
+        setCropQueue([]);
+        resetCropControls();
+        pushToast("Image uploaded", "success");
+      }
+    } catch {
+      pushToast("Failed to upload image", "error");
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.price) return;
@@ -201,13 +393,17 @@ export default function AdminProductsPage() {
       name: form.name.trim(),
       description: form.description.trim() || null,
       price: parseFloat(form.price),
-      stock: form.stock ? parseInt(form.stock, 10) : null,
       imageUrl: images[0] || form.imageUrl.trim() || null,
       sizes: sizes
         .filter((s) => s.size.trim())
         .map((s) => ({
           size: s.size.trim(),
-          stock: s.stock,
+        })),
+      colors: colors
+        .filter((color) => color.name.trim() || color.value)
+        .map((color) => ({
+          name: color.name.trim() || color.value || "Color",
+          value: color.value || "#000000",
         })),
       images: images.map((url, i) => ({ url, position: i })),
     };
@@ -330,16 +526,6 @@ export default function AdminProductsPage() {
                       </svg>
                     </div>
                   )}
-                  {/* Stock Badge */}
-                  <span
-                    className={`absolute top-3 right-3 inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold backdrop-blur-md border ${
-                      (p.stock ?? 0) > 0
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                        : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                    }`}
-                  >
-                    {(p.stock ?? 0) > 0 ? `${p.stock} in stock` : "Out of stock"}
-                  </span>
                 </div>
 
                 {/* Card Info */}
@@ -359,13 +545,19 @@ export default function AdminProductsPage() {
                           <span
                             key={s.size}
                             className="inline-flex items-center rounded-md bg-slate-950 px-2 py-0.5 text-[10px] font-semibold text-slate-400 border border-slate-800/60"
-                            title={`${s.stock} in stock`}
                           >
-                            {s.size} ({s.stock})
+                            {s.size}
                           </span>
                         ))
                       ) : (
                         <span className="text-[10px] text-slate-600 italic">No sizes registered</span>
+                      )}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {p.colors && p.colors.length > 0 && (
+                        <span className="inline-flex items-center rounded-md bg-slate-950 px-2 py-0.5 text-[10px] font-semibold text-slate-400 border border-slate-800/60">
+                          {p.colors.length} color{p.colors.length === 1 ? "" : "s"}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -452,8 +644,8 @@ export default function AdminProductsPage() {
                 />
               </div>
 
-              {/* price + stock */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* price */}
+              <div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">
                     Price <span className="text-rose-400">*</span>
@@ -470,18 +662,6 @@ export default function AdminProductsPage() {
                     className={inputClass}
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Stock</label>
-                  <input
-                    name="stock"
-                    type="number"
-                    min="0"
-                    value={form.stock}
-                    onChange={handleChange}
-                    placeholder="0"
-                    className={inputClass}
-                  />
-                </div>
               </div>
 
               {/* image upload — multi-image */}
@@ -491,7 +671,20 @@ export default function AdminProductsPage() {
                 {images.length > 0 && (
                   <div className="grid grid-cols-3 gap-3 mb-3">
                     {images.map((url, idx) => (
-                      <div key={url + idx} className="relative rounded-xl overflow-hidden border border-slate-800/60 aspect-square bg-slate-950 group">
+                      <div
+                        key={url + idx}
+                        onClick={() => setPreviewImage(url)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setPreviewImage(url);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        className="relative rounded-xl overflow-hidden border border-slate-800/60 aspect-square bg-slate-950 group cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-amber-500/70"
+                        aria-label={`Preview image ${idx + 1}`}
+                      >
                         <img src={url} alt={`Image ${idx + 1}`} className="w-full h-full object-cover" />
                         {/* Primary badge */}
                         {idx === 0 && (
@@ -500,46 +693,51 @@ export default function AdminProductsPage() {
                           </span>
                         )}
                         {/* Action buttons */}
-                        <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute top-1 right-1 flex gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
                           {/* Move up */}
                           {idx > 0 && (
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 setImages((prev) => {
                                   const next = [...prev];
                                   [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
                                   return next;
                                 });
                               }}
-                              className="p-1 rounded bg-slate-950/80 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-800/60 cursor-pointer"
+                              className="h-5 w-5 inline-flex items-center justify-center rounded bg-slate-950/80 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-800/60 cursor-pointer"
                               title="Move up"
                             >
-                              <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                              <svg className="size-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                             </button>
                           )}
                           {/* Move down */}
                           {idx < images.length - 1 && (
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 setImages((prev) => {
                                   const next = [...prev];
                                   [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
                                   return next;
                                 });
                               }}
-                              className="p-1 rounded bg-slate-950/80 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-800/60 cursor-pointer"
+                              className="h-5 w-5 inline-flex items-center justify-center rounded bg-slate-950/80 text-slate-300 hover:text-white backdrop-blur-sm border border-slate-800/60 cursor-pointer"
                               title="Move down"
                             >
-                              <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                              <svg className="size-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                             </button>
                           )}
                           {/* Remove */}
                           <button
                             type="button"
-                            onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
-                            className="p-1 rounded bg-slate-950/80 text-rose-400 hover:text-rose-300 backdrop-blur-sm border border-slate-800/60 cursor-pointer"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setImages((prev) => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="h-5 w-5 inline-flex items-center justify-center rounded bg-slate-950/80 text-rose-400 hover:text-rose-300 backdrop-blur-sm border border-slate-800/60 cursor-pointer [&_svg]:size-3"
                             title="Remove image"
                           >
                             <XIcon />
@@ -576,33 +774,8 @@ export default function AdminProductsPage() {
                     className="hidden"
                     disabled={imageUploading}
                     onChange={async (e) => {
-                      const files = e.target.files;
-                      if (!files || files.length === 0) return;
-                      setImageUploading(true);
-                      try {
-                        for (const file of Array.from(files)) {
-                          const base64 = await new Promise<string>((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.readAsDataURL(file);
-                            reader.onload = () => resolve(reader.result as string);
-                            reader.onerror = reject;
-                          });
-                          const res = await fetch("/api/upload", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ image: base64 }),
-                          });
-                          if (!res.ok) throw new Error();
-                          const data = await res.json();
-                          setImages((prev) => [...prev, data.url]);
-                        }
-                        pushToast("Image(s) uploaded", "success");
-                      } catch {
-                        pushToast("Failed to upload image", "error");
-                      } finally {
-                        setImageUploading(false);
-                        e.target.value = "";
-                      }
+                      await handleImageFilesSelected(e.target.files);
+                      e.target.value = "";
                     }}
                   />
                 </label>
@@ -633,14 +806,6 @@ export default function AdminProductsPage() {
                         placeholder="Size (e.g. M)"
                         className={`${inputClass} flex-1`}
                       />
-                      <input
-                        type="number"
-                        min="0"
-                        value={s.stock}
-                        onChange={(e) => updateSize(idx, "stock", parseInt(e.target.value, 10) || 0)}
-                        placeholder="Stock"
-                        className={`${inputClass} w-24`}
-                      />
                       <button
                         type="button"
                         onClick={() => removeSize(idx)}
@@ -648,6 +813,61 @@ export default function AdminProductsPage() {
                       >
                         <XIcon />
                       </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* colors */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-slate-400">Colors</label>
+                  <button
+                    type="button"
+                    onClick={addColor}
+                    className="inline-flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+                  >
+                    <PlusIcon />
+                    Add color
+                  </button>
+                </div>
+                {colors.length === 0 && (
+                  <p className="text-xs text-slate-600 italic">No colors added. Buyers will not see a color selector.</p>
+                )}
+                <div className="space-y-2">
+                  {colors.map((color, idx) => (
+                    <div key={color.id || idx} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={color.value || "#000000"}
+                          onChange={(e) => updateColor(idx, "value", e.target.value)}
+                          className="h-11 w-14 shrink-0 rounded-lg border border-slate-800 bg-slate-950 p-1 cursor-pointer"
+                          aria-label="Color value"
+                        />
+                        <input
+                          value={color.name}
+                          onChange={(e) => updateColor(idx, "name", e.target.value)}
+                          placeholder="Color name (e.g. Black, White, Navy)"
+                          className={`${inputClass} min-w-0 flex-1`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeColor(idx)}
+                          className="p-2 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0 cursor-pointer"
+                          aria-label="Remove color"
+                        >
+                          <XIcon />
+                        </button>
+                      </div>
+                      <input
+                        value={color.value}
+                        onChange={(e) => updateColor(idx, "value", e.target.value)}
+                        placeholder="#000000"
+                        className={`${inputClass} mt-2 w-full font-mono text-xs`}
+                        dir="ltr"
+                        aria-label="Color hex value"
+                      />
                     </div>
                   ))}
                 </div>
@@ -664,7 +884,7 @@ export default function AdminProductsPage() {
                 Cancel
               </button>
               <button
-                onClick={(e) => {
+                onClick={() => {
                   /* programmatically submit the form */
                   const formEl = document.querySelector<HTMLFormElement>("aside form");
                   if (formEl) formEl.requestSubmit();
@@ -681,6 +901,118 @@ export default function AdminProductsPage() {
       )}
 
       {/* ── Delete Confirmation Modal ── */}
+      {currentCrop && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm animate-[fadeIn_0.2s_ease]">
+          <div className="flex max-h-[96vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Frame image</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {currentCrop.name}
+                  {cropQueue.length > 0 ? ` • ${cropQueue.length} more` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCropModal}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+                aria-label="Cancel image crop"
+              >
+                <XIcon />
+              </button>
+            </div>
+
+            <div className="min-h-0 space-y-4 overflow-y-auto px-3 py-4 sm:px-5 sm:py-5">
+              <canvas
+                ref={cropCanvasRef}
+                className="mx-auto aspect-square w-[min(100%,calc(100vw-2rem))] max-w-sm touch-none rounded-xl border border-slate-800 bg-slate-900 cursor-grab active:cursor-grabbing"
+                onPointerDown={handleCropPointerDown}
+                onPointerMove={handleCropPointerMove}
+                onPointerUp={handleCropPointerEnd}
+                onPointerCancel={handleCropPointerEnd}
+                aria-label="Crop preview"
+              />
+
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCropZoom((value) => clampCropZoom(value - 0.1))}
+                  disabled={imageUploading}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xl font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+                  aria-label="Zoom out"
+                >
+                  -
+                </button>
+                <span className="min-w-16 text-center text-xs font-medium text-slate-400">
+                  {Math.round(cropZoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCropZoom((value) => clampCropZoom(value + 0.1))}
+                  disabled={imageUploading}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xl font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-800 px-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <button
+                type="button"
+                onClick={resetCropControls}
+                disabled={imageUploading}
+                className="rounded-xl px-4 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50 transition-colors"
+              >
+                Reset
+              </button>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeCropModal}
+                  disabled={imageUploading}
+                  className="rounded-xl px-4 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmCropUpload}
+                  disabled={imageUploading}
+                  className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                >
+                  {imageUploading && <SpinnerIcon className="size-4" />}
+                  {cropQueue.length > 0 ? "Upload & next" : "Upload image"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm animate-[fadeIn_0.2s_ease]"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setPreviewImage(null)}
+            className="absolute right-4 top-4 rounded-full border border-white/15 bg-black/50 p-2 text-white hover:bg-white/10 transition-colors"
+            aria-label="Close image preview"
+          >
+            <XIcon />
+          </button>
+          <img
+            src={previewImage}
+            alt="Product image preview"
+            className="max-h-[92vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
+
       {deleteTarget && (
         <>
           <div

@@ -137,19 +137,26 @@ export default function ZimouOfficeSelect({
     }, 0);
 
     fetch(`/api/zimou/quotes?communeId=${selectedCommuneId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch quotes");
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          return {
+            data: [],
+            error: payload?.error || "Failed to fetch quotes",
+          };
+        }
         return res.json();
       })
       .then((payload) => {
         if (!active) return;
         setQuotes(Array.isArray(payload.data) ? payload.data : []);
+        setLoadError(payload.error ? "تعذر حساب أسعار التوصيل" : null);
         setLoadingQuotes(false);
       })
-      .catch((err) => {
-        console.error("Failed to fetch Zimou delivery quotes:", err);
+      .catch(() => {
         if (!active) return;
         setLoadError("تعذر حساب أسعار التوصيل");
+        setQuotes([]);
         setLoadingQuotes(false);
       });
 
@@ -209,6 +216,24 @@ export default function ZimouOfficeSelect({
     };
   };
 
+  const getOfficeQuote = (office: ZimouOfficeOption): ZimouDeliveryQuoteOption =>
+      quotes
+        .filter((item) => normalizeText(item.deliveryType).includes("point relai"))
+        .map((item) => ({ item, score: scoreOfficeQuote(item, office) }))
+        .sort((a, b) => b.score - a.score || a.item.deliveryPrice - b.item.deliveryPrice)[0]?.item ||
+      quotes[0] || {
+        departure: office.partnerCompanyName || office.name,
+        deliveryType: office.name,
+        deliveryPrice: office.deliveryPrice,
+        paidByPromo: false,
+      };
+
+  const formatOfficeOption = (office: ZimouOfficeOption): string => {
+    const quote = getOfficeQuote(office);
+    const company = office.partnerCompanyName || quote.departure || office.name;
+    return `${company} - ${office.address} - ${formatPrice(quote.deliveryPrice)}`;
+  };
+
   const handleOfficeChange = (value: string) => {
     const office = availableOffices.find((item) => item.id === Number(value));
     if (!office) {
@@ -216,18 +241,7 @@ export default function ZimouOfficeSelect({
       return;
     }
 
-    const quote =
-      quotes
-        .filter((item) => normalizeText(item.deliveryType).includes("point relai"))
-        .map((item) => ({ item, score: scoreOfficeQuote(item, office) }))
-        .sort((a, b) => b.score - a.score || a.item.deliveryPrice - b.item.deliveryPrice)[0]?.item ||
-      quotes[0];
-
-    if (!quote) {
-      onSelectChoice(null);
-      return;
-    }
-
+    const quote = getOfficeQuote(office);
     onSelectChoice(makeChoice(office.name, quote.deliveryPrice, quote, office));
   };
 
@@ -301,7 +315,7 @@ export default function ZimouOfficeSelect({
             </option>
             {availableOffices.map((office) => (
               <option key={office.id} value={office.id}>
-                {office.name} - {office.address}
+                {formatOfficeOption(office)}
               </option>
             ))}
           </select>
@@ -334,20 +348,6 @@ export default function ZimouOfficeSelect({
       {loadError && <p className="text-xs font-semibold text-red-600 font-tajawal">{loadError}</p>}
       {error && <p className="text-xs font-semibold text-red-600 font-tajawal">{error}</p>}
 
-      {selectedChoice && (
-        <div className="rounded-lg border border-divider bg-white p-3 text-sm font-tajawal space-y-1">
-          <div className="font-bold text-primary">{selectedChoice.label}</div>
-          <div className="text-muted-text">
-            {selectedChoice.communeName}، {selectedChoice.wilayaName}
-          </div>
-          {selectedChoice.office && (
-            <div className="text-muted-text">{selectedChoice.office.address}</div>
-          )}
-          <div className="font-bold text-black">
-            سعر التوصيل: {formatPrice(selectedChoice.price)}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -48,18 +48,18 @@ export default function CartPage() {
     window.dispatchEvent(new Event("cart-updated"));
   };
 
-  const handleUpdateQuantity = (productId: number, size: string, newQty: number) => {
+  const handleUpdateQuantity = (productId: number, size: string, colorName: string | null | undefined, newQty: number) => {
     if (newQty <= 0) {
-      removeFromCart(productId, size);
+      removeFromCart(productId, size, colorName);
     } else {
-      updateQuantity(productId, size, newQty);
+      updateQuantity(productId, size, colorName, newQty);
     }
     refreshCart();
     dispatchCartUpdate();
   };
 
-  const handleRemove = (productId: number, size: string) => {
-    removeFromCart(productId, size);
+  const handleRemove = (productId: number, size: string, colorName?: string | null) => {
+    removeFromCart(productId, size, colorName);
     refreshCart();
     dispatchCartUpdate();
   };
@@ -104,6 +104,9 @@ export default function CartPage() {
       items: cartItems.map(item => ({
         productId: item.productId,
         size: item.size,
+        colorName: item.colorName ?? null,
+        colorValue: item.colorValue ?? null,
+        heightCategory: item.heightOption ?? null,
         quantity: item.quantity,
         unitPrice: String(item.price)
       }))
@@ -178,7 +181,7 @@ export default function CartPage() {
         {/* Right side (RTL): Cart Items List */}
         <div className="flex-1 space-y-6">
           {cartItems.map((item) => (
-            <div key={`${item.productId}-${item.size}`} className="flex flex-col sm:flex-row gap-6 p-4 border border-divider rounded-xl bg-white">
+            <div key={`${item.productId}-${item.size}-${item.colorName ?? "no-color"}`} className="flex flex-col sm:flex-row gap-6 p-4 border border-divider rounded-xl bg-white">
               <Link 
                 href={`/product/${item.productId}`}
                 aria-label={`عرض المنتج ${item.name}`}
@@ -196,10 +199,22 @@ export default function CartPage() {
                   <div>
                     <h3 className="text-lg font-bold text-primary font-tajawal line-clamp-2">{item.name}</h3>
                     <p className="text-sm text-muted-text mt-1 font-tajawal">المقاس: <span className="font-bold text-black">{item.size}</span></p>
+                    {item.colorName && (
+                      <p className="text-sm text-muted-text mt-1 font-tajawal flex items-center gap-2">
+                        اللون:
+                        <span className="inline-flex h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: item.colorValue ?? "#000000" }} aria-hidden="true" />
+                        <span className="font-bold text-black">{item.colorName}</span>
+                      </p>
+                    )}
+                    {item.heightOption && (
+                      <p className="text-sm text-muted-text mt-1 font-tajawal">
+                        النوع: <span className="font-bold text-black">{item.heightOption === "tall" ? "Tall" : "Short / Cropped"}</span>
+                      </p>
+                    )}
                     <p className="text-sm text-muted-text mt-1 font-tajawal">سعر القطعة: <span className="font-bold text-black">{formatPrice(item.price)}</span></p>
                   </div>
                   <button 
-                    onClick={() => handleRemove(item.productId, item.size)}
+                    onClick={() => handleRemove(item.productId, item.size, item.colorName)}
                     className="text-red-500 hover:text-red-700 text-sm font-bold font-tajawal flex items-center gap-1 transition-colors"
                   >
                     حذف
@@ -210,7 +225,7 @@ export default function CartPage() {
                   <div className="flex items-center space-x-reverse space-x-3 w-28 border border-divider rounded-lg p-1 bg-white">
                     <button
                       type="button"
-                      onClick={() => handleUpdateQuantity(item.productId, item.size, item.quantity - 1)}
+                      onClick={() => handleUpdateQuantity(item.productId, item.size, item.colorName, item.quantity - 1)}
                       className="w-8 h-8 flex items-center justify-center text-lg font-bold text-primary hover:bg-neutral-100 rounded transition-colors"
                     >
                       -
@@ -218,7 +233,7 @@ export default function CartPage() {
                     <span className="flex-1 text-center font-bold text-sm">{item.quantity}</span>
                     <button
                       type="button"
-                      onClick={() => handleUpdateQuantity(item.productId, item.size, item.quantity + 1)}
+                      onClick={() => handleUpdateQuantity(item.productId, item.size, item.colorName, item.quantity + 1)}
                       className="w-8 h-8 flex items-center justify-center text-lg font-bold text-primary hover:bg-neutral-100 rounded transition-colors"
                     >
                       +
@@ -338,6 +353,16 @@ export default function CartPage() {
                 {formErrors.phone && <p className="text-red-500 text-xs mt-1 font-bold font-tajawal">{formErrors.phone}</p>}
               </div>
 
+              <ZimouOfficeSelect
+                mode={deliveryMethod === "home" ? "home" : "office"}
+                selectedChoice={selectedDelivery}
+                onSelectChoice={(choice) => {
+                  setSelectedDelivery(choice);
+                  setFormErrors((prev) => ({ ...prev, delivery: "" }));
+                }}
+                error={formErrors.delivery}
+              />
+
               {deliveryMethod === "home" && (
                 <div>
                   <label className="block text-sm font-bold text-primary mb-1.5 font-tajawal">
@@ -353,16 +378,6 @@ export default function CartPage() {
                   {formErrors.address && <p className="text-red-500 text-xs mt-1 font-bold font-tajawal">{formErrors.address}</p>}
                 </div>
               )}
-
-              <ZimouOfficeSelect
-                mode={deliveryMethod === "home" ? "home" : "office"}
-                selectedChoice={selectedDelivery}
-                onSelectChoice={(choice) => {
-                  setSelectedDelivery(choice);
-                  setFormErrors((prev) => ({ ...prev, delivery: "" }));
-                }}
-                error={formErrors.delivery}
-              />
 
               <div>
                 <label className="block text-sm font-bold text-primary mb-1.5 font-tajawal">البريد الإلكتروني (اختياري)</label>

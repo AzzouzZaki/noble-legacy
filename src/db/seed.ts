@@ -1,5 +1,5 @@
 import { db } from "./index";
-import { products, productSizes, productImages, orders, orderItems } from "./schema";
+import { products, productSizes, productImages, productColors, orders, orderItems } from "./schema";
 import { uploadImage } from "../lib/cloudinary";
 import "dotenv/config";
 
@@ -23,15 +23,12 @@ const seedProducts = [
 const adultSizes = ["S", "M", "L", "XL", "XXL"];
 const kidsSizes = ["2-3Y", "4-5Y", "6-7Y", "8-9Y"];
 
-function getRandomInt(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
 async function seed() {
   console.log("🌱 Seeding database...");
 
   // clear existing seed data (optional — delete in reverse FK order)
   await db.delete(productImages);
+  await db.delete(productColors);
   await db.delete(productSizes);
   await db.delete(orderItems);
   await db.delete(orders);
@@ -57,7 +54,6 @@ async function seed() {
         name: p.name,
         price: p.price,
         imageUrl: imageUrls[0], // First image as fallback/primary
-        stock: 0, // We'll rely on sizes for stock mostly, but setting to 0 as default
         description: `This is a high quality ${p.type} t-shirt.`,
       })
       .returning();
@@ -67,7 +63,6 @@ async function seed() {
     const sizesData = sizesToInsert.map(size => ({
       productId: insertedProduct.id,
       size: size,
-      stock: p.type === "adult" ? getRandomInt(5, 20) : getRandomInt(5, 15),
     }));
     await db.insert(productSizes).values(sizesData);
 

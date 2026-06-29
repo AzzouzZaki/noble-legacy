@@ -11,7 +11,6 @@ import ZimouOfficeSelect, {
 interface SizeEntry {
   id: number;
   size: string;
-  stock: number;
 }
 
 interface ProductImage {
@@ -20,15 +19,21 @@ interface ProductImage {
   position: number | null;
 }
 
+interface ProductColor {
+  id: number;
+  name: string;
+  value: string;
+}
+
 interface Product {
   id: number;
   name: string;
   description: string | null;
   price: string;
-  stock: number | null;
   imageUrl: string | null;
   sizes: SizeEntry[];
   images?: ProductImage[];
+  colors?: ProductColor[];
 }
 
 interface ProductPageProps {
@@ -42,6 +47,8 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
+  const [selectedHeight, setSelectedHeight] = useState<"tall" | "cropped" | null>(null);
   const [quantity, setQuantity] = useState(1);
   
   // Validation & status states
@@ -49,9 +56,6 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const [cartSuccess, setCartSuccess] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
-
-  // Order form visibility
-  const [showOrderForm, setShowOrderForm] = useState(false);
 
   // Form states
   const [deliveryType, setDeliveryType] = useState<"home" | "pickup">("home");
@@ -70,6 +74,9 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
       .then((data) => {
         if (data && !data.error) {
           setProduct(data);
+          if (Array.isArray(data.colors) && data.colors.length === 1) {
+            setSelectedColor(data.colors[0]);
+          }
         }
         setLoading(false);
       })
@@ -111,10 +118,20 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const deliveryPrice = selectedDelivery?.price ?? 0;
   const productTotal = priceValue * quantity;
   const orderTotal = productTotal + deliveryPrice;
+  const availableColors = product.colors ?? [];
+  const hasColorOptions = availableColors.length > 0;
 
   const handleAddToCart = () => {
     if (!selectedSize) {
       setSizeError("يرجى اختيار المقاس أولاً");
+      return;
+    }
+    if (hasColorOptions && !selectedColor) {
+      setSizeError("يرجى اختيار اللون أولاً");
+      return;
+    }
+    if (!selectedHeight) {
+      setSizeError("يرجى اختيار الطول أولاً");
       return;
     }
     setSizeError(null);
@@ -124,6 +141,9 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
       name: product.name,
       price: priceValue,
       size: selectedSize,
+      colorName: selectedColor?.name ?? null,
+      colorValue: selectedColor?.value ?? null,
+      heightOption: selectedHeight,
       quantity: quantity,
       imageUrl: product.imageUrl || undefined,
     });
@@ -136,17 +156,6 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
     setTimeout(() => setCartSuccess(false), 2000);
   };
 
-  const handleOrderNowClick = () => {
-    if (!selectedSize) {
-      setSizeError("يرجى اختيار المقاس أولاً");
-      return;
-    }
-    setSizeError(null);
-    setShowOrderForm(true);
-    // Scroll to form smoothly after it renders
-    setTimeout(() => orderFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-  };
-
   const handleQtyChange = (val: number) => {
     if (val < 1) return;
     setQuantity(val);
@@ -157,6 +166,16 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
 
     if (!selectedSize) {
       setSizeError("يرجى اختيار المقاس أولاً");
+      orderFormRef.current?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    if (hasColorOptions && !selectedColor) {
+      setSizeError("يرجى اختيار اللون أولاً");
+      orderFormRef.current?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    if (!selectedHeight) {
+      setSizeError("يرجى اختيار الطول أولاً");
       orderFormRef.current?.scrollIntoView({ behavior: "smooth" });
       return;
     }
@@ -197,6 +216,9 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
         {
           productId: product.id,
           size: selectedSize,
+          colorName: selectedColor?.name ?? null,
+          colorValue: selectedColor?.value ?? null,
+          heightCategory: selectedHeight,
           quantity: quantity,
           unitPrice: String(priceValue),
         },
@@ -221,6 +243,8 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
       setAddress("");
       setSelectedDelivery(null);
       setSelectedSize(null);
+      setSelectedColor(null);
+      setSelectedHeight(null);
       setQuantity(1);
     } catch (err) {
       console.error(err);
@@ -280,38 +304,24 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
             <div className="flex flex-wrap gap-3">
               {product.sizes && product.sizes.length > 0 ? (
                 product.sizes.map((s) => {
-                  const isOutOfStock = s.stock <= 0;
                   const isSelected = selectedSize === s.size;
                   return (
                     <button
                       key={s.id}
                       onClick={() => {
-                        if (isOutOfStock) return;
                         setSelectedSize(s.size);
                         setSizeError(null);
                       }}
-                      disabled={isOutOfStock}
                       className={`
                         min-w-[3.5rem] h-11 px-4 py-2 text-sm font-bold rounded-lg transition-all duration-150 cursor-pointer font-tajawal
-                        ${isOutOfStock ? "bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed line-through" : ""}
                         ${
-                          !isOutOfStock && isSelected
+                          isSelected
                             ? "bg-black text-white border border-black"
-                            : ""
-                        }
-                        ${
-                          !isOutOfStock && !isSelected
-                            ? "bg-white text-black border border-black hover:bg-neutral-50"
-                            : ""
+                            : "bg-white text-black border border-black hover:bg-neutral-50"
                         }
                       `}
                     >
                       {s.size}
-                      {s.stock > 0 && s.stock <= 5 && (
-                        <span className="block text-[8px] font-normal leading-none mt-0.5">
-                          (متبقي {s.stock})
-                        </span>
-                      )}
                     </button>
                   );
                 })
@@ -320,6 +330,67 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
               )}
             </div>
           </div>
+
+          {/* Height Selector */}
+          <div>
+            <span className="text-sm font-bold text-primary block mb-3 font-tajawal">الطول</span>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: "tall" as const, label: "Tall" },
+                { value: "cropped" as const, label: "Short / Cropped" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setSelectedHeight(option.value);
+                    setSizeError(null);
+                  }}
+                  className={`h-11 rounded-lg border text-sm font-bold transition-all duration-150 cursor-pointer font-tajawal ${
+                    selectedHeight === option.value
+                      ? "border-black bg-black text-white"
+                      : "border-neutral-300 bg-white text-black hover:border-black"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Color Selector */}
+          {hasColorOptions && (
+            <div>
+              <span className="text-sm font-bold text-primary block mb-3 font-tajawal">اللون</span>
+              <div className="flex flex-wrap gap-3">
+                {availableColors.map((color) => {
+                  const isSelected = selectedColor?.id === color.id;
+                  return (
+                    <button
+                      key={color.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedColor(color);
+                        setSizeError(null);
+                      }}
+                      className={`min-w-[7rem] h-11 px-3 rounded-lg border text-sm font-bold transition-all duration-150 cursor-pointer font-tajawal inline-flex flex-row-reverse items-center justify-center gap-2 ${
+                        isSelected
+                          ? "border-black bg-black text-white"
+                          : "border-neutral-300 bg-white text-black hover:border-black"
+                      }`}
+                    >
+                      <span
+                        className="h-4 w-4 rounded-full border border-black/10"
+                        style={{ backgroundColor: color.value }}
+                        aria-hidden="true"
+                      />
+                      <span>{color.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Quantity Selector */}
           <div>
@@ -343,55 +414,19 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          {/* Action Buttons Section */}
-          <div className="space-y-4 pt-4 border-t border-divider">
-            {/* Button 1: Add to Cart */}
-            <div className="relative">
-              <button
-                onClick={handleAddToCart}
-                className="w-full bg-white hover:bg-neutral-50 text-black border-2 border-black text-base font-bold py-4 rounded-lg transition-colors duration-200 cursor-pointer font-tajawal flex items-center justify-center gap-2"
-              >
-                إضافة إلى السلة
-              </button>
-              {cartSuccess && (
-                <div className="absolute inset-0 bg-neutral-900 text-white font-bold py-4 rounded-lg flex items-center justify-center text-base animate-pulse">
-                  تمت الإضافة إلى السلة ✓
-                </div>
-              )}
-            </div>
-
-            {/* Button 2: Order Now */}
-            <button
-              onClick={handleOrderNowClick}
-              className="w-full bg-black hover:bg-neutral-900 text-white text-base font-bold py-4 rounded-lg transition-colors duration-200 cursor-pointer font-tajawal"
-            >
-              اطلب الآن
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Order Form Section — shown only after clicking Order Now */}
-      {showOrderForm && (
+      {/* Order Form Section */}
         <div
           ref={orderFormRef}
           id="order-form"
           className="pt-16 border-t border-divider max-w-3xl mx-auto animate-fade-up"
         >
-          <div className="flex items-center justify-between mb-8">
+          <div className="mb-8">
             <h2 className="text-2xl font-bold text-primary font-tajawal">
               أكمل طلبك
             </h2>
-            <button
-              type="button"
-              onClick={() => setShowOrderForm(false)}
-              className="text-muted-text hover:text-primary transition-colors text-sm font-medium font-tajawal flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              إغلاق
-            </button>
           </div>
 
           {orderSuccess ? (
@@ -403,7 +438,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
                 ✓ تم استلام طلبك بنجاح! سنتواصل معك قريباً.
               </p>
               <button
-                onClick={() => { setOrderSuccess(false); setShowOrderForm(false); }}
+                onClick={() => setOrderSuccess(false)}
                 className="mt-2 text-sm text-green-700 underline font-semibold font-tajawal"
               >
                 طلب منتج آخر أو مقاس جديد
@@ -515,8 +550,8 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
                 error={formErrors.delivery}
               />
 
-              {/* Address — only for home delivery, shown AFTER delivery is chosen */}
-              {deliveryType === "home" && selectedDelivery && (
+              {/* Address — only for home delivery */}
+              {deliveryType === "home" && (
                 <div className="space-y-2 animate-fade-up">
                   <label htmlFor="address" className="text-sm font-bold text-primary block font-tajawal">
                     عنوان المنزل التفصيلي
@@ -556,18 +591,34 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
                 </div>
               </div>
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={formSubmitting}
-                className="w-full bg-black hover:bg-neutral-900 text-white font-bold py-4 rounded-lg transition-colors duration-200 cursor-pointer disabled:opacity-50 font-tajawal text-center flex items-center justify-center"
-              >
-                {formSubmitting ? "جاري تأكيد طلبك..." : "تأكيد الطلب"}
-              </button>
+              {/* Action Buttons */}
+              <div className="space-y-4 pt-2">
+                <button
+                  type="submit"
+                  disabled={formSubmitting}
+                  className="w-full bg-black hover:bg-neutral-900 text-white font-bold py-4 rounded-lg transition-colors duration-200 cursor-pointer disabled:opacity-50 font-tajawal text-center flex items-center justify-center"
+                >
+                  {formSubmitting ? "جاري تأكيد طلبك..." : "اطلب الآن"}
+                </button>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    className="w-full bg-white hover:bg-neutral-50 text-black border-2 border-black text-base font-bold py-4 rounded-lg transition-colors duration-200 cursor-pointer font-tajawal flex items-center justify-center gap-2"
+                  >
+                    إضافة إلى السلة
+                  </button>
+                  {cartSuccess && (
+                    <div className="absolute inset-0 bg-neutral-900 text-white font-bold py-4 rounded-lg flex items-center justify-center text-base animate-pulse">
+                      تمت الإضافة إلى السلة ✓
+                    </div>
+                  )}
+                </div>
+              </div>
             </form>
           )}
         </div>
-      )}
 
     </div>
   );
