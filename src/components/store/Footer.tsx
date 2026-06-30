@@ -13,16 +13,12 @@ const contactInfo = [
   { label: "العنوان", value: "الجزائر العاصمة، الجزائر", href: null },
 ];
 
+
+
 const socialLinks = [
   { name: "إنستغرام", href: "#", ariaLabel: "زيارة حساب المتجر على إنستغرام" },
   { name: "تيك توك", href: "#", ariaLabel: "زيارة حساب المتجر على تيك توك" },
   { name: "فيسبوك", href: "#", ariaLabel: "زيارة صفحة المتجر على فيسبوك" },
-];
-
-const legalLinks = [
-  { name: "سياسة الخصوصية", href: "#" },
-  { name: "الشروط والأحكام", href: "#" },
-  { name: "سياسة التوصيل", href: "#" },
 ];
 
 export default function Footer() {
@@ -98,20 +94,6 @@ export default function Footer() {
               Noble Legacy
             </p>
           </Link>
-        </div>
-
-        {/* Level 3: Bottom Legal Row */}
-        <div className="mt-4 flex flex-col gap-2 border-t border-divider pt-3 text-[10px] text-muted-text sm:mt-5 sm:gap-3 sm:pt-4 sm:text-xs md:flex-row md:items-center md:justify-between">
-          <div className="text-center md:text-right">
-            © {new Date().getFullYear()} العريقة. جميع الحقوق محفوظة.
-          </div>
-          <div className="flex flex-wrap justify-center gap-3 sm:gap-6">
-            {legalLinks.map((link) => (
-              <Link key={link.name} href={link.href} className="hover:text-black transition-colors duration-200">
-                {link.name}
-              </Link>
-            ))}
-          </div>
         </div>
 
       </div>
