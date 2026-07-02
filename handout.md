@@ -1,164 +1,77 @@
 # Project Handout
 
-## Current Project
+## Summary
 
 - Workspace: `C:\dev\my-store`
-- App: Next.js 16 App Router storefront/admin for a T-shirt shop.
-- Important rule from `AGENTS.md`: this Next.js version may differ from older docs, so read relevant guides in `node_modules/next/dist/docs/` before editing Next.js code.
-- Do not revert existing uncommitted changes unless explicitly asked.
-- Use `apply_patch` for manual edits.
+- App: Next.js 16 App Router storefront/admin for an Arabic T-shirt shop called Noble Legacy / العريقة.
+- Important repo rule from `AGENTS.md`: this is a newer Next.js version with breaking changes, so read relevant docs in `node_modules/next/dist/docs/` before editing Next-specific behavior.
+- Use `apply_patch` for manual code edits.
+- Do not revert user/unrelated changes. The repo may be dirty.
+- Do not print `.env` secrets in responses.
 
-## Recent User Goal
+## Current Git State
 
-The latest active feature work is the admin image crop/upload flow.
+At the time this handout was generated:
 
-The owner/admin should be able to choose which part of an uploaded image is cropped into the final fixed square image. The crop modal should not merely preview a different framing while upload still crops from a default position. The preview and the saved upload must use the same crop math.
-
-## Current State Of Image Cropper
-
-File to inspect:
-
-- `src/app/admin/products/page.tsx`
-
-Recent cropper changes already started:
-
-- `useRef` was added to React imports.
-- Added `PendingCropImage` interface.
-- Added crop states:
-  - `cropQueue`
-  - `currentCrop`
-  - `cropZoom`
-  - `cropX`
-  - `cropY`
-  - `cropDrag`
-  - `cropCanvasRef`
-- File input now calls `handleImageFilesSelected`.
-- Upload now opens a crop modal before uploading.
-- Crop modal uses a square `<canvas>` preview, with pointer drag for mobile/web and +/- zoom buttons.
-- The intended final fix is that `drawCropToCanvas` draws both:
-  - the visible preview canvas, and
-  - the hidden upload canvas used to produce the final image.
-
-Expected crop math shape:
-
-```ts
-const baseScale = Math.max(outputSize / image.naturalWidth, outputSize / image.naturalHeight);
-const scale = baseScale * cropZoom;
-const drawWidth = image.naturalWidth * scale;
-const drawHeight = image.naturalHeight * scale;
-const maxOffsetX = Math.max(0, (drawWidth - outputSize) / 2);
-const maxOffsetY = Math.max(0, (drawHeight - outputSize) / 2);
-const drawX = (outputSize - drawWidth) / 2 + (cropX / 100) * maxOffsetX;
-const drawY = (outputSize - drawHeight) / 2 + (cropY / 100) * maxOffsetY;
-context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+```text
+## master
+ M src/app/(store)/cart/page.tsx
+ M src/app/(store)/product/[id]/page.tsx
+ M src/app/layout.tsx
+?? src/lib/meta-pixel.ts
 ```
 
-Potential issue to check:
+Recent Git/deploy context:
 
-- Make sure `drawCropToCanvas` is declared before any `useEffect` that depends on it.
-- Prefer this order:
-  - `loadImageElement`
-  - `drawCropToCanvas`
-  - `buildCroppedImage`
-  - crop preview `useEffect`
+- Remote is `TshirtShop` at `https://github.com/AzzouzZaki/noble-legacy.git`.
+- Local branch is `master`.
+- Remote `TshirtShop/master` had Vercel commits, which caused a non-fast-forward push rejection.
+- The safe flow was to pull/rebase `TshirtShop master`, then push.
+- After pulling, `@vercel/analytics` and `@vercel/speed-insights` imports existed but packages were missing locally. Running `npm install` installed the two packages. `package.json` and `package-lock.json` already included them.
 
-Verification commands:
+## Important Current/Open User Request
 
-```powershell
-npx.cmd tsc --noEmit --pretty false
-npx.cmd eslint "src\app\admin\products\page.tsx"
-```
+The user previously said:
 
-Expected ESLint result:
+> i am failing to delete this products تيشيرت باكي هانما and تيشيرت ستريتوير فايت, find why and remove them
 
-- It may pass with warnings about `<img>` usage. Those warnings existed before and are not necessarily part of this task.
+This has not been investigated yet in the latest work. Next agent should treat this as the active unresolved task unless the user says otherwise.
 
-## Previous Completed Work
+Likely steps:
 
-### Zimou API Integration
+1. Inspect product delete route/admin delete flow.
+2. Check DB relations that may block deletion, especially `product_images`, `product_sizes`, `product_colors`, `order_items`, or other foreign keys.
+3. Find the two products by exact Arabic names.
+4. Remove dependent rows safely or fix cascade behavior, then delete the products.
+5. Verify `/api/products` and admin product list no longer show them.
 
-Added Zimou API support and removed the need for scraping/neon seeded office tables.
+Network/DB access may need approval depending on sandbox. Use the existing `.env` `DATABASE_URL`, but never reveal it.
 
-Key files:
+## Core App Structure
 
-- `src/lib/zimou.ts`
-- `src/app/api/zimou/*`
-- `src/components/store/ZimouOfficeSelect.tsx`
+Important paths:
 
-Previously tested endpoints:
+- Store layout: `src/app/(store)/layout.tsx`
+- Home page: `src/app/(store)/page.tsx`
+- Product detail: `src/app/(store)/product/[id]/page.tsx`
+- Cart page: `src/app/(store)/cart/page.tsx`
+- Admin products: `src/app/admin/products/page.tsx`
+- Admin orders: `src/app/admin/orders/page.tsx`
+- DB schema: `src/db/schema.ts`
+- Zimou API helpers: `src/lib/zimou.ts`
+- Zimou selector: `src/components/store/ZimouOfficeSelect.tsx`
+- Product gallery: `src/components/store/ImageCarousel.tsx`
+- Footer: `src/components/store/Footer.tsx`
 
-- `/api/zimou/wilayas`
-- `/api/zimou/communes`
-- `/api/zimou/offices`
-
-They returned 200 locally in an earlier check.
-
-Known possible future issue:
-
-- User previously saw `Failed to fetch quotes` from `ZimouOfficeSelect`.
-- This has not been fully fixed yet because the user pivoted back to the cropper.
-- Likely next debugging target:
-  - `src/app/api/zimou/quotes/route.ts`
-  - `src/app/api/zimou/quote/route.ts`
-  - `src/components/store/ZimouOfficeSelect.tsx`
-  - `src/lib/zimou.ts`
-
-### Product Colors, Height Categories, And Stock Removal
-
-Implemented:
-
-- Product colors table and admin CRUD.
-- Buyer can choose one color when product has colors.
-- Product can have no color options.
-- Buyer selects height option:
-  - tall
-  - cropped
-- Removed stock tracking from product and size flows.
-
-Migrations already created/applied:
-
-- `drizzle/0003_good_shotgun.sql`
-- `drizzle/0004_wise_thundra.sql`
-
-Related behavior:
-
-- Product detail page requires size, height, and color if colors exist.
-- Cart items include `heightOption`.
-- Orders send `heightCategory`.
-
-### Product Detail Form UX
-
-Changed product detail page so the order form is visible immediately. The user should not need to press “Order now” before seeing the form. Buttons are placed below the form.
-
-### Mobile/Home/Footer UX
-
-Earlier requested and partially adjusted:
-
-- Shirt card should be hidden only on mobile, visible on desktop.
-- Desktop hero should show the card on the left and text on the right.
-- Mobile footer should be more compact and use 3 columns instead of one.
-- Footer was later reported as taking too much space on phone.
-
-If revisiting this, inspect the current CSS/components first because several iterations happened.
-
-### Admin Product Image Controls
-
-Implemented:
-
-- Tiny remove/switch image buttons on thumbnails.
-- On desktop, controls appear on hover.
-- On mobile, controls must still be accessible.
-- Clicking an image opens a full-screen preview.
-
-## Useful Commands
+Useful commands:
 
 ```powershell
 npm.cmd run dev
 npx.cmd tsc --noEmit --pretty false
-npx.cmd eslint "src\app\admin\products\page.tsx"
+npx.cmd eslint "src\path\to\file.tsx"
 ```
 
-If database migrations are needed, load `DATABASE_URL` from `.env` and run:
+Database migrations:
 
 ```powershell
 $envLine = Get-Content -LiteralPath '.env' | Where-Object { $_ -like 'DATABASE_URL=*' } | Select-Object -First 1
@@ -166,13 +79,140 @@ $env:DATABASE_URL = $envLine.Substring('DATABASE_URL='.Length)
 npx.cmd drizzle-kit migrate
 ```
 
-Do not print secrets from `.env` in final responses.
+## Implemented Product/Order Features
 
-## Next Best Step
+Products now support:
 
-Continue from the cropper:
+- Sizes.
+- Optional colors via `product_colors`.
+- Buyer color selection if colors exist.
+- Buyer height/category selection:
+  - `tall`
+  - `cropped`
+- No stock tracking. Product and size stock were removed from UI/data flow.
 
-1. Inspect `src/app/admin/products/page.tsx`.
-2. Confirm the crop preview canvas and final upload use the same `drawCropToCanvas` function.
-3. Run TypeScript and ESLint checks.
-4. If all passes, tell the user the crop modal now saves exactly the framed square they see.
+Migrations already created/applied earlier:
+
+- `drizzle/0003_good_shotgun.sql`
+- `drizzle/0004_wise_thundra.sql`
+
+Order/cart behavior:
+
+- Cart items can include `heightOption`.
+- Order items store `heightCategory`.
+- Admin orders show height category.
+- Product detail form is always visible; user does not press "Order now" just to reveal the form.
+
+## Zimou Delivery Integration
+
+The app uses Zimou's public API instead of scraping/seeded Neon tables.
+
+Key behavior:
+
+- `/api/zimou/wilayas`, `/api/zimou/communes`, `/api/zimou/offices`, and `/api/zimou/quotes` provide delivery data.
+- `ZimouOfficeSelect` filters by wilaya, then commune.
+- Home delivery then chooses delivery company/type.
+- Office delivery then chooses delivery office.
+- Office dropdown should display:
+  - delivery company
+  - office address
+  - price
+- The selected-delivery summary card below the selector was removed after the user said it was unwanted.
+- For home delivery, the home address textarea should be always visible when home mode is selected and should appear directly below the delivery type selector. It must not wait for a selected delivery quote.
+
+Recent Zimou resilience fix:
+
+- The client no longer throws a visible console error when `/api/zimou/quotes` returns non-OK.
+- Office delivery can fall back to the office's own `deliveryPrice` when quotes are unavailable.
+
+## Storefront UX Changes
+
+Footer:
+
+- Footer was shrunk because it took too much space.
+- Mobile and desktop footer use 3 equal columns.
+- Footer text should not wrap; it truncates instead.
+- Several alignment tweaks were attempted for the "Follow us" column. Inspect current component before changing again.
+
+Home hero:
+
+- Shirt/product card should be hidden on mobile only.
+- On desktop, hero should keep the previous card on the left and text on the right.
+
+Product gallery:
+
+- `ImageCarousel` now uses CSS scroll snapping for smooth drag/swipe between product images.
+- Swiping/dragging reveals adjacent photos while moving.
+- Arrows, dots, and thumbnails should still control the same scroll-snap track.
+- Arrow behavior was explicitly reversed at the user's request:
+  - left arrow goes next
+  - right arrow goes previous
+
+## Admin Image Management
+
+Admin product images:
+
+- Image thumbnail controls for remove/switch are tiny.
+- Desktop controls show on hover.
+- Mobile controls remain accessible.
+- Clicking an image opens a full-screen preview.
+
+Image cropper:
+
+- Admin upload opens a crop/framing modal before upload.
+- Crop preview uses a square canvas.
+- User can drag with finger/cursor and use +/- zoom.
+- The final uploaded image should be generated from the exact same canvas math as the preview, so the saved crop matches what the admin framed.
+
+Important file:
+
+- `src/app/admin/products/page.tsx`
+
+If cropper is revisited, verify:
+
+```powershell
+npx.cmd tsc --noEmit --pretty false
+npx.cmd eslint "src\app\admin\products\page.tsx"
+```
+
+## Meta/Vercel Tracking
+
+Current uncommitted changes include Meta Pixel tracking:
+
+- `src/app/layout.tsx` imports `next/script`, reads `NEXT_PUBLIC_META_PIXEL_ID`, and injects the Meta Pixel script when present.
+- `src/lib/meta-pixel.ts` is new and untracked.
+- `src/app/(store)/product/[id]/page.tsx` tracks:
+  - `ViewContent`
+  - `AddToCart`
+  - `Lead` after successful direct order
+- `src/app/(store)/cart/page.tsx` tracks:
+  - `InitiateCheckout` once per cart checkout visit
+  - `Lead` after successful cart order
+- Vercel analytics and speed insights are in `src/app/layout.tsx`.
+
+Before committing/pushing this tracking work, inspect `src/lib/meta-pixel.ts` and run:
+
+```powershell
+npx.cmd tsc --noEmit --pretty false
+```
+
+## Known Verification Notes
+
+Recently passing checks:
+
+- `npx.cmd tsc --noEmit --pretty false` passed after several changes.
+- ESLint often passes with warnings only for existing `<img>` usage in store/cart/gallery/admin pages.
+
+Existing warning pattern:
+
+- `@next/next/no-img-element` warnings are common and were not treated as blockers unless the user asks to convert to `next/image`.
+
+## Next Agent Priorities
+
+If the user asks to continue immediately, start with the unresolved deletion task:
+
+1. Read Next route handler docs if editing API routes.
+2. Inspect product/admin delete implementation and DB schema relations.
+3. Reproduce why deleting `تيشيرت باكي هانما` and `تيشيرت ستريتوير فايت` fails.
+4. Delete the products and necessary dependent rows safely.
+5. Verify locally and report exactly what blocked deletion.

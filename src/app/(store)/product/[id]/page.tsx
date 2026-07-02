@@ -2,6 +2,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { addToCart } from "@/lib/cart";
+import {
+  clearMetaOrderFlowEventId,
+  getMetaEventId,
+  getMetaOrderFlowEventId,
+  trackAddToCart,
+  trackLead,
+  trackViewContent,
+} from "@/lib/meta-pixel";
 import { formatPrice } from "@/lib/utils";
 import ImageCarousel from "@/components/store/ImageCarousel";
 import ZimouOfficeSelect, {
@@ -67,6 +75,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
   const orderFormRef = useRef<HTMLDivElement>(null);
+  const hasTrackedViewContentRef = useRef(false);
 
   useEffect(() => {
     fetch(`/api/products/${id}`)
@@ -85,6 +94,22 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
         setLoading(false);
       });
   }, [id]);
+
+  useEffect(() => {
+    if (!product || hasTrackedViewContentRef.current) return;
+
+    hasTrackedViewContentRef.current = true;
+
+    // Track ViewContent when the product detail page is viewed.
+    trackViewContent({
+      event_id: getMetaEventId("ViewContent", `product:${product.id}`),
+      content_ids: [String(product.id)],
+      content_name: product.name,
+      content_type: "product",
+      currency: "DZD",
+      value: Number.parseFloat(product.price || "0"),
+    });
+  }, [product]);
 
   if (loading) {
     return (
@@ -146,6 +171,23 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
       heightOption: selectedHeight,
       quantity: quantity,
       imageUrl: product.imageUrl || undefined,
+    });
+
+    // Track AddToCart when the user adds the configured item to the cart.
+    trackAddToCart({
+      content_ids: [String(product.id)],
+      contents: [
+        {
+          id: String(product.id),
+          quantity,
+          item_price: priceValue,
+        },
+      ],
+      content_name: product.name,
+      content_type: "product",
+      currency: "DZD",
+      value: priceValue * quantity,
+      quantity,
     });
 
     // Notify header cart icon count
@@ -236,7 +278,28 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
         throw new Error("Failed to create order");
       }
 
+      const orderFlowKey = `direct:${product.id}:${selectedSize}:${selectedColor?.name ?? "none"}:${selectedHeight}`;
+      const orderFlowEventId = getMetaOrderFlowEventId(orderFlowKey);
+
+      // Track Lead only after the manual order is successfully submitted.
+      trackLead({
+        event_id: orderFlowEventId,
+        content_ids: [String(product.id)],
+        contents: [
+          {
+            id: String(product.id),
+            quantity,
+            item_price: priceValue,
+          },
+        ],
+        content_name: product.name,
+        content_type: "product",
+        currency: "DZD",
+        value: orderTotal,
+      });
+
       setOrderSuccess(true);
+      clearMetaOrderFlowEventId(orderFlowKey);
       // Reset form
       setFullName("");
       setPhone("");

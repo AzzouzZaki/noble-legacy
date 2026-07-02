@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CartItem,
@@ -10,14 +10,29 @@ import {
   clearCart,
   getCartTotal,
 } from "@/lib/cart";
+import {
+  clearMetaOrderFlowEventId,
+  getMetaOrderFlowEventId,
+  trackInitiateCheckout,
+  trackLead,
+} from "@/lib/meta-pixel";
 import { formatPrice } from "@/lib/utils";
 import ZimouOfficeSelect, {
   ZimouDeliveryChoice,
 } from "@/components/store/ZimouOfficeSelect";
 
+const getCartOrderFlowKey = (items: CartItem[]) =>
+  `cart:${items
+    .map((item) => `${item.productId}:${item.size}:${item.colorName ?? "none"}`)
+    .join("|")}`;
+
+const getCartOrderFlowEventId = (items: CartItem[]) =>
+  getMetaOrderFlowEventId(getCartOrderFlowKey(items));
+
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+  const hasTrackedInitiateCheckoutRef = useRef(false);
 
   // Form state
   const [fullName, setFullName] = useState("");
@@ -43,6 +58,27 @@ export default function CartPage() {
 
     return () => window.clearTimeout(timeoutId);
   }, []);
+
+  useEffect(() => {
+    if (!isMounted || cartItems.length === 0 || hasTrackedInitiateCheckoutRef.current) return;
+
+    hasTrackedInitiateCheckoutRef.current = true;
+
+    // Track InitiateCheckout when the user reaches the cart checkout flow.
+    trackInitiateCheckout({
+      event_id: getCartOrderFlowEventId(cartItems),
+      content_ids: cartItems.map((item) => String(item.productId)),
+      contents: cartItems.map((item) => ({
+        id: String(item.productId),
+        quantity: item.quantity,
+        item_price: item.price,
+      })),
+      content_type: "product",
+      currency: "DZD",
+      num_items: cartItems.reduce((sum, item) => sum + item.quantity, 0),
+      value: getCartTotal(cartItems),
+    });
+  }, [isMounted, cartItems]);
 
   const dispatchCartUpdate = () => {
     window.dispatchEvent(new Event("cart-updated"));
@@ -123,8 +159,23 @@ export default function CartPage() {
         throw new Error("Failed to submit order");
       }
 
+      // Track Lead only after the manual order is successfully submitted.
+      trackLead({
+        event_id: getCartOrderFlowEventId(cartItems),
+        content_ids: cartItems.map((item) => String(item.productId)),
+        contents: cartItems.map((item) => ({
+          id: String(item.productId),
+          quantity: item.quantity,
+          item_price: item.price,
+        })),
+        content_type: "product",
+        currency: "DZD",
+        value: totalAmount,
+      });
+
       // Success
       setSubmitSuccess(true);
+      clearMetaOrderFlowEventId(getCartOrderFlowKey(cartItems));
       clearCart();
       refreshCart();
       dispatchCartUpdate();
