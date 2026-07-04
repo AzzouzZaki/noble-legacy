@@ -9,6 +9,23 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+// ─── Admin Push Subscriptions ────────────────────────────────────────────────
+
+/**
+ * Stores Web Push subscriptions for each admin device.
+ * Endpoint is unique — one row per browser/device subscription.
+ */
+export const adminPushSubscriptions = pgTable("admin_push_subscriptions", {
+  id: serial("id").primaryKey(),
+  /** The push service URL for this subscription (unique per device/browser) */
+  endpoint: text("endpoint").notNull().unique(),
+  /** ECDH public key from the subscription (base64url) */
+  p256dh: text("p256dh").notNull(),
+  /** Authentication secret from the subscription (base64url) */
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: varchar("name").notNull(),

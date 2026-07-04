@@ -1,7 +1,174 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+// ─── VAPID public key (safe to expose to the client) ─────────────────────────
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+
+/**
+ * Convert a base64url VAPID public key to the Uint8Array that
+ * PushManager.subscribe() expects as applicationServerKey.
+ */
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+function PushToggle() {
+  const [status, setStatus] = useState<"loading" | "subscribed" | "unsubscribed" | "unsupported">("loading");
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
+      setStatus("unsupported");
+      return;
+    }
+
+    async function initPush() {
+      try {
+        if (!VAPID_PUBLIC_KEY) {
+          setStatus("unsupported");
+          return;
+        }
+
+        const registration = await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+        });
+        await navigator.serviceWorker.ready;
+
+        const sub = await registration.pushManager.getSubscription();
+        if (sub) {
+          setStatus("subscribed");
+        } else {
+          // Auto-subscribe if not already, to satisfy the initial requirement
+          const permission = await Notification.requestPermission();
+          if (permission === "granted") {
+            const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+            const newSub = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
+            });
+            const serialized = newSub.toJSON();
+            const res = await fetch("/api/admin/push/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                endpoint: serialized.endpoint,
+                keys: serialized.keys,
+              }),
+            });
+            if (!res.ok) {
+              await newSub.unsubscribe();
+              throw new Error("Backend failed to save subscription");
+            }
+            setStatus("subscribed");
+          } else {
+            setStatus("unsubscribed");
+          }
+        }
+      } catch (err) {
+        console.warn("[Push] Failed to init push:", err);
+        setStatus("unsubscribed");
+      }
+    }
+
+    initPush();
+  }, []);
+
+  async function handleToggle() {
+    if (status === "subscribed") {
+      setStatus("loading");
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const sub = await registration?.pushManager.getSubscription();
+        if (sub) {
+          await sub.unsubscribe();
+          await fetch("/api/admin/push/unsubscribe", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+        }
+        setStatus("unsubscribed");
+      } catch (err) {
+        console.warn("[Push] Unsubscribe failed:", err);
+        setStatus("subscribed");
+      }
+    } else if (status === "unsubscribed") {
+      setStatus("loading");
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          setStatus("unsubscribed");
+          alert("Notification permission denied. Please allow it in browser settings.");
+          return;
+        }
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (!registration) throw new Error("No SW registration");
+
+        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        const newSub = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
+        });
+        const serialized = newSub.toJSON();
+        const res = await fetch("/api/admin/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: serialized.endpoint,
+            keys: serialized.keys,
+          }),
+        });
+        if (!res.ok) {
+          await newSub.unsubscribe();
+          throw new Error("Backend failed to save subscription");
+        }
+        setStatus("subscribed");
+      } catch (err) {
+        console.warn("[Push] Subscribe failed:", err);
+        setStatus("unsubscribed");
+      }
+    }
+  }
+
+  if (status === "unsupported") return null;
+
+  return (
+    <div className="px-3 py-2 mt-auto">
+      <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/50">
+        <div className="flex items-center gap-2">
+          <svg className={`w-4 h-4 ${status === "subscribed" ? "text-amber-400" : "text-slate-500"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+          </svg>
+          <span className="text-xs font-medium text-slate-300">Push Alerts</span>
+        </div>
+        {status === "loading" ? (
+          <span className="text-[10px] text-slate-500 font-medium">WAIT...</span>
+        ) : (
+          <button
+            onClick={handleToggle}
+            className={`text-[10px] px-2 py-1 rounded-md font-bold tracking-widest transition-colors ${
+              status === "subscribed" 
+                ? "bg-amber-500/20 text-amber-500 hover:bg-amber-500/30" 
+                : "bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-300"
+            }`}
+          >
+            {status === "subscribed" ? "ON" : "OFF"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const NAV_ITEMS = [
   {
@@ -80,7 +247,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="px-3 py-4 space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
@@ -102,6 +269,9 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             );
           })}
         </nav>
+
+        {/* Push Notification Toggle (auto-pushes to bottom with mt-auto) */}
+        <PushToggle />
 
         {/* Logout */}
         <div className="px-3 py-4 border-t border-slate-800/60">

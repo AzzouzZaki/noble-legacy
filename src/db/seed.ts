@@ -1,5 +1,7 @@
+import crypto from "crypto";
+import { eq } from "drizzle-orm";
 import { db } from "./index";
-import { products, productSizes, productImages, productColors, orders, orderItems } from "./schema";
+import { adminUsers, products, productSizes, productImages, productColors, orders, orderItems } from "./schema";
 import { uploadImage } from "../lib/cloudinary";
 import "dotenv/config";
 
@@ -22,6 +24,41 @@ const seedProducts = [
 
 const adultSizes = ["S", "M", "L", "XL", "XXL"];
 const kidsSizes = ["2-3Y", "4-5Y", "6-7Y", "8-9Y"];
+const adminAccounts = [
+  {
+    username: "anis",
+    password: "anis@2005",
+  },
+];
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password).digest("hex");
+}
+
+async function upsertAdminAccounts() {
+  for (const account of adminAccounts) {
+    const existing = await db
+      .select()
+      .from(adminUsers)
+      .where(eq(adminUsers.username, account.username))
+      .limit(1);
+
+    const passwordHash = hashPassword(account.password);
+
+    if (existing.length > 0) {
+      await db
+        .update(adminUsers)
+        .set({ passwordHash })
+        .where(eq(adminUsers.username, account.username));
+      continue;
+    }
+
+    await db.insert(adminUsers).values({
+      username: account.username,
+      passwordHash,
+    });
+  }
+}
 
 async function seed() {
   console.log("🌱 Seeding database...");
@@ -33,6 +70,8 @@ async function seed() {
   await db.delete(orderItems);
   await db.delete(orders);
   await db.delete(products);
+
+  await upsertAdminAccounts();
 
   let imageCounter = 1;
 

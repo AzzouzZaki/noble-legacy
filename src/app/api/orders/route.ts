@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { orders, orderItems } from "@/db/schema";
+import { NotificationService } from "@/lib/notifications/service";
 
 // GET /api/orders
 export async function GET() {
@@ -64,6 +65,12 @@ export async function POST(request: NextRequest) {
         }))
       );
     }
+
+    // ─── Push Notification ──────────────────────────────────────────────────
+    // Await delivery so the serverless runtime doesn't kill the background task.
+    // NotificationService.newOrder() catches its own errors and never throws,
+    // guaranteeing that order creation always returns 201 even if push fails.
+    await NotificationService.newOrder(newOrder);
 
     return NextResponse.json(newOrder, { status: 201 });
   } catch (error) {
