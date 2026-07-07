@@ -94,21 +94,35 @@ export default function ZimouOfficeSelect({
     let active = true;
 
     Promise.all([
-      fetch("/api/zimou/wilayas").then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch wilayas");
+      fetch("/api/zimou/wilayas").then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          return { data: [], error: errData.error || "Failed to fetch wilayas" };
+        }
         return res.json();
       }),
-      fetch("/api/zimou/communes").then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch communes");
+      fetch("/api/zimou/communes").then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          return { data: [], error: errData.error || "Failed to fetch communes" };
+        }
         return res.json();
       }),
-      fetch("/api/zimou/offices").then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch offices");
+      fetch("/api/zimou/offices").then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          return { data: [], error: errData.error || "Failed to fetch offices" };
+        }
         return res.json();
       }),
     ])
       .then(([wilayasPayload, communesPayload, officesPayload]) => {
         if (!active) return;
+        if (wilayasPayload.error || communesPayload.error || officesPayload.error) {
+          setLoadError("تعذر تحميل بيانات التوصيل");
+          setLoadingLists(false);
+          return;
+        }
         setWilayas(Array.isArray(wilayasPayload.data) ? wilayasPayload.data : []);
         setCommunes(Array.isArray(communesPayload.data) ? communesPayload.data : []);
         setOffices(Array.isArray(officesPayload.data) ? officesPayload.data : []);

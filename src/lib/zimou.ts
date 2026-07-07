@@ -71,6 +71,32 @@ function parseZimouPrice(value: string | number | null): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  delay = 500
+): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok || (response.status >= 400 && response.status < 500)) {
+        return response;
+      }
+      console.warn(
+        `[Zimou] Outbound request to ${url} failed with status ${response.status}. Retrying... (${i + 1}/${retries})`
+      );
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      console.warn(
+        `[Zimou] Outbound request to ${url} threw error: ${error}. Retrying... (${i + 1}/${retries})`
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, delay * Math.pow(2, i)));
+  }
+  throw new Error(`[Zimou] Outbound request to ${url} failed after ${retries} retries`);
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -84,7 +110,7 @@ async function getZimouToken(): Promise<string> {
     return process.env.ZIMOU_API_TOKEN;
   }
 
-  const response = await fetch(`${ZIMOU_API_BASE_URL}/v3/login`, {
+  const response = await fetchWithRetry(`${ZIMOU_API_BASE_URL}/v3/login`, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -111,7 +137,7 @@ async function getZimouToken(): Promise<string> {
 
 export async function fetchZimouOffices(): Promise<ZimouOffice[]> {
   const token = await getZimouToken();
-  const response = await fetch(`${ZIMOU_API_BASE_URL}/v3/helpers/offices`, {
+  const response = await fetchWithRetry(`${ZIMOU_API_BASE_URL}/v3/helpers/offices`, {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
@@ -141,7 +167,7 @@ export async function fetchZimouOffices(): Promise<ZimouOffice[]> {
 
 export async function fetchZimouWilayas(): Promise<ZimouWilaya[]> {
   const token = await getZimouToken();
-  const response = await fetch(`${ZIMOU_API_BASE_URL}/v3/helpers/wilayas`, {
+  const response = await fetchWithRetry(`${ZIMOU_API_BASE_URL}/v3/helpers/wilayas`, {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
@@ -166,7 +192,7 @@ export async function fetchZimouWilayas(): Promise<ZimouWilaya[]> {
 
 export async function fetchZimouCommunes(): Promise<ZimouCommune[]> {
   const token = await getZimouToken();
-  const response = await fetch(`${ZIMOU_API_BASE_URL}/v3/helpers/communes`, {
+  const response = await fetchWithRetry(`${ZIMOU_API_BASE_URL}/v3/helpers/communes`, {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
@@ -200,7 +226,7 @@ export async function fetchZimouDeliveryQuotes(
 ): Promise<ZimouDeliveryQuote[]> {
   const token = await getZimouToken();
   const params = new URLSearchParams({ commune_id: String(communeId) });
-  const response = await fetch(`${ZIMOU_API_BASE_URL}/v3/comparators?${params}`, {
+  const response = await fetchWithRetry(`${ZIMOU_API_BASE_URL}/v3/comparators?${params}`, {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,

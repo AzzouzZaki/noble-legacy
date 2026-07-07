@@ -11,6 +11,14 @@ import {
   trackViewContent,
 } from "@/lib/meta-pixel";
 import { formatPrice } from "@/lib/utils";
+import {
+  type Variant,
+  addVariant as addVariantToList,
+  removeVariant,
+  updateVariantQuantity,
+  getTotalPieces,
+} from "@/lib/variants";
+import VariantList from "@/components/store/VariantList";
 import ImageCarousel from "@/components/store/ImageCarousel";
 import ZimouOfficeSelect, {
   ZimouDeliveryChoice,
@@ -58,6 +66,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
   const [selectedHeight, setSelectedHeight] = useState<"tall" | "cropped" | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [variants, setVariants] = useState<Variant[]>([]);
   
   // Validation & status states
   const [sizeError, setSizeError] = useState<string | null>(null);
@@ -141,59 +150,92 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const priceValue = parseFloat(product.price || "0");
   const formattedPrice = `${priceValue.toFixed(0)} دج`;
   const deliveryPrice = selectedDelivery?.price ?? 0;
-  const productTotal = priceValue * quantity;
+  const totalQuantity = variants.length > 0 ? getTotalPieces(variants) : quantity;
+  const productTotal = priceValue * totalQuantity;
   const orderTotal = productTotal + deliveryPrice;
   const availableColors = product.colors ?? [];
   const hasColorOptions = availableColors.length > 0;
 
-  const handleAddToCart = () => {
+  /** Validate that size, height, and color (if applicable) are selected. */
+  const validateSelections = (): boolean => {
     if (!selectedSize) {
       setSizeError("يرجى اختيار المقاس أولاً");
-      return;
+      return false;
     }
     if (hasColorOptions && !selectedColor) {
       setSizeError("يرجى اختيار اللون أولاً");
-      return;
+      return false;
     }
     if (!selectedHeight) {
       setSizeError("يرجى اختيار الطول أولاً");
-      return;
+      return false;
     }
     setSizeError(null);
+    return true;
+  };
 
-    addToCart({
-      productId: product.id,
-      name: product.name,
-      price: priceValue,
-      size: selectedSize,
+  const handleAddVariant = () => {
+    if (!validateSelections()) return;
+    const newVariant: Variant = {
+      size: selectedSize!,
+      heightCategory: selectedHeight!,
       colorName: selectedColor?.name ?? null,
       colorValue: selectedColor?.value ?? null,
-      heightOption: selectedHeight,
-      quantity: quantity,
-      imageUrl: product.imageUrl || undefined,
-    });
+      quantity,
+    };
+    setVariants((prev) => addVariantToList(prev, newVariant));
+    setQuantity(1);
+  };
 
-    // Track AddToCart when the user adds the configured item to the cart.
+  const handleAddToCart = () => {
+    if (variants.length > 0) {
+      for (const v of variants) {
+        addToCart({
+          productId: product.id,
+          name: product.name,
+          price: priceValue,
+          size: v.size,
+          colorName: v.colorName,
+          colorValue: v.colorValue,
+          heightOption: v.heightCategory,
+          quantity: v.quantity,
+          imageUrl: product.imageUrl || undefined,
+        });
+      }
+    } else {
+      if (!validateSelections()) return;
+      addToCart({
+        productId: product.id,
+        name: product.name,
+        price: priceValue,
+        size: selectedSize!,
+        colorName: selectedColor?.name ?? null,
+        colorValue: selectedColor?.value ?? null,
+        heightOption: selectedHeight,
+        quantity,
+        imageUrl: product.imageUrl || undefined,
+      });
+    }
+
     trackAddToCart({
       content_ids: [String(product.id)],
       contents: [
         {
           id: String(product.id),
-          quantity,
+          quantity: totalQuantity,
           item_price: priceValue,
         },
       ],
       content_name: product.name,
       content_type: "product",
       currency: "DZD",
-      value: priceValue * quantity,
-      quantity,
+      value: productTotal,
+      quantity: totalQuantity,
     });
 
-    // Notify header cart icon count
     window.dispatchEvent(new Event("cart-updated"));
 
-    // Show inline success message
+    if (variants.length > 0) setVariants([]);
     setCartSuccess(true);
     setTimeout(() => setCartSuccess(false), 2000);
   };
@@ -206,22 +248,13 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const handleOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedSize) {
-      setSizeError("يرجى اختيار المقاس أولاً");
-      orderFormRef.current?.scrollIntoView({ behavior: "smooth" });
-      return;
+    // When no variants exist, validate current selections
+    if (variants.length === 0) {
+      if (!validateSelections()) {
+        orderFormRef.current?.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
     }
-    if (hasColorOptions && !selectedColor) {
-      setSizeError("يرجى اختيار اللون أولاً");
-      orderFormRef.current?.scrollIntoView({ behavior: "smooth" });
-      return;
-    }
-    if (!selectedHeight) {
-      setSizeError("يرجى اختيار الطول أولاً");
-      orderFormRef.current?.scrollIntoView({ behavior: "smooth" });
-      return;
-    }
-    setSizeError(null);
 
     // Validate form fields
     const errors: { [key: string]: string } = {};
@@ -249,22 +282,34 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
         ? `عنوان المنزل: ${address} - ${deliveryDetails}`
         : `استلام من مكتب التوصيل - ${deliveryDetails}`;
 
+    const orderItems = variants.length > 0
+      ? variants.map((v) => ({
+          productId: product.id,
+          size: v.size,
+          colorName: v.colorName,
+          colorValue: v.colorValue,
+          heightCategory: v.heightCategory,
+          quantity: v.quantity,
+          unitPrice: String(priceValue),
+        }))
+      : [
+          {
+            productId: product.id,
+            size: selectedSize,
+            colorName: selectedColor?.name ?? null,
+            colorValue: selectedColor?.value ?? null,
+            heightCategory: selectedHeight,
+            quantity,
+            unitPrice: String(priceValue),
+          },
+        ];
+
     const payload = {
       customerName: fullName,
       customerPhone: phone,
       shippingAddress: finalAddress,
       totalAmount: String(orderTotal),
-      items: [
-        {
-          productId: product.id,
-          size: selectedSize,
-          colorName: selectedColor?.name ?? null,
-          colorValue: selectedColor?.value ?? null,
-          heightCategory: selectedHeight,
-          quantity: quantity,
-          unitPrice: String(priceValue),
-        },
-      ],
+      items: orderItems,
     };
 
     try {
@@ -278,7 +323,9 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
         throw new Error("Failed to create order");
       }
 
-      const orderFlowKey = `direct:${product.id}:${selectedSize}:${selectedColor?.name ?? "none"}:${selectedHeight}`;
+      const orderFlowKey = variants.length > 0
+        ? `direct:${product.id}:variants:${variants.length}`
+        : `direct:${product.id}:${selectedSize}:${selectedColor?.name ?? "none"}:${selectedHeight}`;
       const orderFlowEventId = getMetaOrderFlowEventId(orderFlowKey);
 
       // Track Lead only after the manual order is successfully submitted.
@@ -288,7 +335,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
         contents: [
           {
             id: String(product.id),
-            quantity,
+            quantity: totalQuantity,
             item_price: priceValue,
           },
         ],
@@ -309,6 +356,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
       setSelectedColor(null);
       setSelectedHeight(null);
       setQuantity(1);
+      setVariants([]);
     } catch (err) {
       console.error(err);
       setOrderError("حدث خطأ، يرجى المحاولة مجدداً.");
@@ -477,6 +525,29 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
             </div>
           </div>
 
+          {/* Add Variant Button */}
+          <div>
+            <button
+              type="button"
+              onClick={handleAddVariant}
+              className="w-full h-11 flex items-center justify-center gap-2 text-sm font-bold border-2 border-dashed border-neutral-300 hover:border-black text-muted-text hover:text-primary rounded-lg transition-all duration-150 cursor-pointer font-tajawal"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              إضافة خيار آخر
+            </button>
+          </div>
+
+          {/* Selected Variants List */}
+          <VariantList
+            variants={variants}
+            onUpdateQuantity={(key, qty) =>
+              setVariants((prev) => updateVariantQuantity(prev, key, qty))
+            }
+            onRemove={(key) => setVariants((prev) => removeVariant(prev, key))}
+          />
+
         </div>
       </div>
 
@@ -641,7 +712,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
               {/* Order Summary */}
               <div className="rounded-lg border border-divider bg-neutral-50 p-4 space-y-2 font-tajawal">
                 <div className="flex justify-between text-sm text-muted-text">
-                  <span>المجموع الفرعي</span>
+                  <span>المجموع الفرعي{variants.length > 0 && ` (${totalQuantity} قطع)`}</span>
                   <span className="font-bold text-primary">{formatPrice(productTotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-muted-text">
